@@ -1,7 +1,8 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
-  /* Default / Dark Theme Tokens */
   :root, :root.dark {
     --bg-main: #000000;
     --surface-glass: rgba(255, 255, 255, 0.06);
@@ -20,7 +21,6 @@
     --accent-rose: #ff453a;
   }
 
-  /* Apple iOS Light Theme Tokens */
   :root.light {
     --bg-main: #f2f2f7;
     --surface-glass: rgba(255, 255, 255, 0.75);
