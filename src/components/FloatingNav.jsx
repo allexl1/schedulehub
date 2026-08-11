@@ -1,60 +1,29 @@
 import React from 'react';
+import Icon from './common/Icon';
 
 export default function FloatingNav({ activeTab, setActiveTab }) {
   const navItems = [
-    { id: 'home', label: 'Home', icon: '🏠' },
-    { id: 'schedule', label: 'Schedule', icon: '📅' },
-    { id: 'teachers', label: 'Teachers', icon: '👨‍🏫' },
-    { id: 'exams', label: 'Exams', icon: '📝' },
-    { id: 'settings', label: 'Settings', icon: '⚙️' },
+    { id: 'home', label: 'Home', icon: 'home' },
+    { id: 'schedule', label: 'Schedule', icon: 'schedule' },
+    { id: 'teachers', label: 'Teachers', icon: 'teachers' },
+    { id: 'exams', label: 'Exams', icon: 'exams' },
+    { id: 'settings', label: 'Settings', icon: 'settings' },
   ];
 
   return (
-    <nav style={{
-      position: 'fixed',
-      bottom: '20px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: 'calc(100% - 32px)',
-      maxWidth: '408px',
-      background: 'rgba(15, 23, 42, 0.85)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
-      border: '1px solid rgba(255, 255, 255, 0.12)',
-      borderRadius: '24px',
-      padding: '8px 12px',
-      display: 'flex',
-      justify: 'space-around',
-      alignItems: 'center',
-      zIndex: 1000,
-      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)'
-    }}>
+    <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-[408px] liquid-glass rounded-full p-1.5 flex justify-around items-center z-50 shadow-2xl">
       {navItems.map((item) => {
         const isActive = activeTab === item.id;
         return (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justify: 'center',
-              padding: '6px 8px',
-              cursor: 'pointer',
-              color: isActive ? '#60a5fa' : '#64748b',
-              transition: 'all 0.2s ease',
-              transform: isActive ? 'scale(1.08)' : 'scale(1)'
-            }}
+            className={`flex flex-col items-center justify-center flex-1 py-2 px-1 rounded-full transition-all duration-200 ${
+              isActive ? 'text-[#2997ff] scale-105' : 'text-[#86868b] hover:text-[#f5f5f7]'
+            }`}
           >
-            <span style={{ fontSize: '18px', marginBottom: '2px', lineHeight: 1 }}>{item.icon}</span>
-            <span style={{
-              fontSize: '10px',
-              fontWeight: isActive ? 700 : 500,
-              letterSpacing: '0.02em'
-            }}>
+            <Icon name={item.icon} className="w-5 h-5 mb-0.5" />
+            <span className={`text-[10px] font-semibold tracking-tight ${isActive ? 'text-[#2997ff]' : 'text-[#86868b]'}`}>
               {item.label}
             </span>
           </button>
