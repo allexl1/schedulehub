@@ -46,7 +46,6 @@ async function sendTelegramMessage(chatId, text) {
 export default async function handler(req, res) {
   const authHeader = req.headers.authorization;
   
-  // Clean hidden formatting, unicode symbols, or trailing spaces from query string
   const rawQuerySecret = req.query.secret || '';
   const cleanQuerySecret = rawQuerySecret.replace(/[^a-zA-Z0-9_]/g, '');
 
@@ -68,10 +67,21 @@ export default async function handler(req, res) {
     const protocol = host.includes('localhost') ? 'http' : 'https';
     
     const scheduleRes = await fetch(`${protocol}://${host}/api/bsuir/schedule?group=150501`);
-    const scheduleData = await scheduleRes.json();
+    const rawText = await scheduleRes.text();
+
+    let scheduleData;
+    try {
+      scheduleData = JSON.parse(rawText);
+    } catch (parseErr) {
+      return res.status(502).json({
+        error: 'Schedule API returned non-JSON response',
+        status: scheduleRes.status,
+        responsePreview: rawText.slice(0, 120)
+      });
+    }
 
     if (!scheduleData.success || !scheduleData.data?.nextLesson) {
-      return res.status(200).json({ status: 'No upcoming lesson found' });
+      return res.status(200).json({ status: 'No upcoming lesson found', data: scheduleData });
     }
 
     const next = scheduleData.data.nextLesson;
