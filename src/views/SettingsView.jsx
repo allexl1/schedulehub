@@ -1,84 +1,92 @@
 import React, { useState } from 'react';
 
-export default function SettingsView() {
-  const [group, setGroup] = useState('150501');
-  const [subgroup, setSubgroup] = useState('1');
-  const [reminders, setReminders] = useState(true);
+export default function SettingsView({ group, setGroup }) {
+  const [inputVal, setInputVal] = useState(group || '150501');
+  const [savedMsg, setSavedMsg] = useState(false);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!inputVal.trim()) return;
+    const cleanGroup = inputVal.trim();
+    setGroup(cleanGroup);
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 2000);
+  };
 
   return (
     <div>
-      <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 16px 0' }}>Settings</h2>
+      <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>Settings</h2>
 
-      {/* Student Profile Section */}
-      <div className="glass-panel" style={{ padding: '18px', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 14px 0', color: 'var(--accent-blue, #38bdf8)' }}>ACADEMIC PROFILE</h3>
-        
-        <div style={{ marginBottom: '14px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', marginBottom: '6px' }}>Group Number</label>
+      <div style={{
+        background: 'rgba(15, 23, 42, 0.6)',
+        border: '1px solid rgba(51, 65, 85, 0.5)',
+        borderRadius: '16px',
+        padding: '16px',
+        marginBottom: '16px'
+      }}>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginBottom: '8px' }}>
+          BSUIR Student Group Number
+        </label>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '8px' }}>
           <input
             type="text"
-            value={group}
-            onChange={(e) => setGroup(e.target.value)}
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            placeholder="150501"
             style={{
-              width: '100%',
-              padding: '10px 14px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              color: '#fff',
-              fontSize: '14px'
+              flex: 1,
+              background: 'rgba(30, 41, 59, 0.8)',
+              border: '1px solid rgba(51, 65, 85, 0.8)',
+              borderRadius: '10px',
+              padding: '10px 12px',
+              color: '#ffffff',
+              fontSize: '14px',
+              fontWeight: 600,
+              outline: 'none'
             }}
           />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', marginBottom: '6px' }}>Subgroup</label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['1', '2', 'Both'].map(sub => (
-              <button
-                key={sub}
-                onClick={() => setSubgroup(sub)}
-                style={{
-                  flex: 1,
-                  padding: '8px 0',
-                  background: subgroup === sub ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                  border: `1px solid ${subgroup === sub ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.08)'}`,
-                  borderRadius: '10px',
-                  color: subgroup === sub ? 'var(--accent-blue, #38bdf8)' : '#fff',
-                  fontSize: '13px',
-                  fontWeight: 600
-                }}
-              >
-                {sub === 'Both' ? 'Both' : `Sub ${sub}`}
-              </button>
-            ))}
+          <button
+            type="submit"
+            style={{
+              background: '#2563eb',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '10px 16px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Save
+          </button>
+        </form>
+        {savedMsg && (
+          <div style={{ fontSize: '11px', color: '#10b981', marginTop: '8px', fontWeight: 600 }}>
+            ✓ Group updated successfully!
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Notifications Controls */}
-      <div className="glass-panel" style={{ padding: '18px', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 14px 0', color: 'var(--accent-blue, #38bdf8)' }}>NOTIFICATIONS</h3>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: '14px', fontWeight: 600 }}>Class Reminders</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)' }}>Get Telegram alerts 15m before class</div>
-          </div>
-          <input
-            type="checkbox"
-            checked={reminders}
-            onChange={(e) => setReminders(e.target.checked)}
-            style={{ width: '20px', height: '20px', accentColor: 'var(--accent-blue, #38bdf8)' }}
-          />
-        </div>
-      </div>
-
-      {/* System Health */}
-      <div className="glass-panel" style={{ padding: '18px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 10px 0', color: 'var(--accent-blue, #38bdf8)' }}>SYSTEM STATUS</h3>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-          <span>BSUIR API Service</span>
-          <span style={{ color: '#34d399', fontWeight: 600 }}>● Operational</span>
+      <div style={{
+        background: 'rgba(15, 23, 42, 0.6)',
+        border: '1px solid rgba(51, 65, 85, 0.5)',
+        borderRadius: '16px',
+        padding: '16px'
+      }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', margin: 0 }}>Class Reminders</h3>
+        <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 12px 0' }}>
+          Automated Telegram alerts are sent 15 minutes before your scheduled lectures and labs.
+        </p>
+        <div style={{
+          fontSize: '11px',
+          color: '#38bdf8',
+          background: 'rgba(56, 189, 248, 0.1)',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          border: '1px solid rgba(56, 189, 248, 0.2)'
+        }}>
+          Status: Active via Telegram Bot
         </div>
       </div>
     </div>
