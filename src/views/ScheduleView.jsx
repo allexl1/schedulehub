@@ -1,134 +1,249 @@
 import React, { useState, useEffect } from 'react';
-import GlassCard from '../components/common/GlassCard';
 import PersonalEventModal from '../components/schedule/PersonalEventModal';
+import {
+  getClassStatus,
+  parseStartTimeInMinutes,
+  getMinutesUntilEnd,
+  parseTimeRange
+} from '../utils/time';
 
-export default function ScheduleView({ todaySchedule = [], loading }) {
-  const [selectedDay, setSelectedDay] = useState('Mon');
-  const [viewMode, setViewMode] = useState('day'); // 'day' | 'week'
+export default function ScheduleView({ todaySchedule = [], loading = false }) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Real-time tick state (updates every 30 seconds)
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const currentDayIndex = now.getDay() - 1; // Mon = 0, Tue = 1, ..., Sat = 5, Sun = -1
+  const todayDayName = currentDayIndex >= 0 ? days[currentDayIndex] : 'Sun';
+
+  const [selectedDay, setSelectedDay] = useState(() =>
+    todayDayName === 'Sun' ? 'Mon' : todayDayName
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [personalEvents, setPersonalEvents] = useState(() => {
-    return JSON.parse(localStorage.getItem('sh_personal_events') || '[]');
+    try {
+      const saved = localStorage.getItem('sh_personal_events');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
-
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const handleAddEvent = (newEvent) => {
     const updated = [...personalEvents, newEvent];
     setPersonalEvents(updated);
-    localStorage.setItem('sh_personal_events', JSON.stringify(updated));
+
+    try {
+      localStorage.setItem('sh_personal_events', JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed to save personal event:', e);
+    }
   };
 
-  // Merge BSUIR timetable schedule with personal events
+  const isSelectedDayToday = selectedDay === todayDayName;
   const dayPersonalEvents = personalEvents.filter((ev) => ev.day === selectedDay);
-  const combinedSchedule = [...todaySchedule, ...dayPersonalEvents];
+
+  // Combine schedule data according to data availability constraints
+  const unmergedSchedule = isSelectedDayToday
+    ? [...todaySchedule, ...dayPersonalEvents]
+    : [...dayPersonalEvents];
+
+  // Immutable chronological sort
+  const sortedSchedule = [...unmergedSchedule].sort((a, b) => {
+    return parseStartTimeInMinutes(a.time) - parseStartTimeInMinutes(b.time);
+  });
+
+  // Assign lesson statuses (Past, In Progress, Next, Upcoming)
+  let foundNext = false;
+  const processedSchedule = sortedSchedule.map((item) => {
+    const rawStatus = getClassStatus(item.time, isSelectedDayToday, now);
+    let finalStatus = rawStatus;
+
+    if (rawStatus === 'upcoming' && !foundNext && isSelectedDayToday) {
+      finalStatus = 'next';
+      foundNext = true;
+    }
+
+    return { ...item, status: finalStatus };
+  });
 
   return (
-    <div className="space-y-4">
-      {/* View Header & Mode Toggle */}
+    <div className="space-y-5">
+      {/* Header Bar */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">Schedule</h2>
-          <p className="text-xs text-[var(--text-secondary)]">Week 2 • Academic Timetable</p>
+          <h2 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
+            Schedule
+          </h2>
+          <p className="text-xs font-medium text-[var(--text-secondary)] mt-0.5">
+            Academic Timetable
+          </p>
         </div>
 
-        <div className="flex items-center gap-1.5 p-1 bg-black/10 dark:bg-white/5 rounded-xl border border-[var(--border-glass)]">
-          <button
-            onClick={() => setViewMode('day')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-              viewMode === 'day' ? 'bg-[#2997ff] text-white shadow-sm' : 'text-[var(--text-secondary)]'
-            }`}
-          >
-            Day
-          </button>
-          <button
-            onClick={() => setViewMode('week')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-              viewMode === 'week' ? 'bg-[#2997ff] text-white shadow-sm' : 'text-[var(--text-secondary)]'
-            }`}
-          >
-            Week
-          </button>
-        </div>
-      </div>
-
-      {/* Day Selector */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {days.map((day) => (
-          <button
-            key={day}
-            onClick={() => setSelectedDay(day)}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-              selectedDay === day
-                ? 'bg-[#2997ff] text-white shadow-md'
-                : 'liquid-glass text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            {day}
-          </button>
-        ))}
-      </div>
-
-      {/* Action Bar */}
-      <div className="flex justify-between items-center pt-1">
-        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-          {selectedDay} Classes ({combinedSchedule.length})
-        </span>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="text-xs font-semibold text-[#2997ff] bg-[#2997ff]/10 border border-[#2997ff]/20 px-2.5 py-1 rounded-lg"
+          className="text-xs font-bold text-[#2997ff] bg-[#2997ff]/10 px-3 py-1.5 rounded-xl transition-all active:scale-95"
         >
           + Add Event
         </button>
       </div>
 
-      {/* Timetable List */}
+      {/* Day Selector Bar */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {days.map((day) => {
+          const isToday = day === todayDayName;
+          const isSelected = day === selectedDay;
+
+          return (
+            <button
+              key={day}
+              onClick={() => setSelectedDay(day)}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all text-center min-w-[50px] ${
+                isSelected
+                  ? 'bg-[#2997ff] text-white shadow-sm'
+                  : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
+              }`}
+            >
+              <span>{day}</span>
+              {isToday && (
+                <span className={`block text-[9px] font-normal ${isSelected ? 'text-white/80' : 'text-[#2997ff]'}`}>
+                  Today
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Data Availability Warning Banner for Non-Today Days */}
+      {!isSelectedDayToday && (
+        <div className="p-3 rounded-xl bg-[var(--surface-glass)] border border-[var(--border-glass)] text-xs text-[var(--text-secondary)] flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#2997ff] shrink-0" />
+          <span>
+            {todayDayName === 'Sun'
+              ? 'Sunday is a non-academic day. Select a day to view personal events.'
+              : 'Academic schedule unavailable for this day in current data source.'}
+          </span>
+        </div>
+      )}
+
+      {/* Agenda Section Title */}
+      <div className="flex justify-between items-center px-0.5">
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+          {selectedDay} Agenda ({processedSchedule.length})
+        </h3>
+      </div>
+
+      {/* Grouped Schedule Container */}
       {loading ? (
-        <GlassCard className="text-center py-8 text-xs text-[var(--text-secondary)]">
+        <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
           Loading timetable...
-        </GlassCard>
-      ) : combinedSchedule.length > 0 ? (
-        <div className="space-y-2.5">
-          {combinedSchedule.map((item, idx) => {
-            const isFirst = idx === 0; // Highlight current/next class
+        </div>
+      ) : processedSchedule.length > 0 ? (
+        <div className="bg-[var(--surface-glass)] rounded-2xl overflow-hidden divide-y divide-[var(--border-glass)]">
+          {processedSchedule.map((item, idx) => {
+            const isPast = item.status === 'past';
+            const isInProgress = item.status === 'in_progress';
+            const isNext = item.status === 'next';
+
+            const minutesLeft = isInProgress ? getMinutesUntilEnd(item.time, now) : null;
+            const timeParts = parseTimeRange(item.time);
+
+            const startTime = timeParts ? timeParts[0] : item.time?.split(' - ')[0] || '09:00';
+            const endTime = timeParts ? timeParts[1] : item.time?.split(' - ')[1] || '10:20';
+
             return (
-              <GlassCard
-                key={idx}
-                className={`flex gap-3 items-center ${
-                  isFirst ? 'border-l-4 border-l-[#2997ff]' : ''
-                }`}
+              <div
+                key={item.id || idx}
+                className={`p-4 flex items-center justify-between gap-3 transition-all ${
+                  isPast ? 'opacity-35' : 'opacity-100'
+                } ${isInProgress ? 'bg-white/10 dark:bg-white/10' : ''}`}
               >
-                <div className="text-center pr-3 border-r border-[var(--border-glass)] min-w-[65px]">
-                  <span className="block text-xs font-bold text-[#2997ff]">
-                    {item.time?.split(' - ')[0] || '09:00'}
+                {/* Time Column */}
+                <div className="w-24 shrink-0 font-mono">
+                  <span
+                    className={`block text-xs font-bold ${
+                      isInProgress
+                        ? 'text-[#30d158] text-sm'
+                        : isNext
+                        ? 'text-[#2997ff]'
+                        : 'text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {startTime}
                   </span>
-                  <span className="block text-[10px] text-[var(--text-secondary)]">
-                    {item.time?.split(' - ')[1] || '10:20'}
+                  <span className="block text-[10px] text-[var(--text-secondary)] font-medium">
+                    {endTime}
                   </span>
                 </div>
 
+                {/* Lesson Details */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h4
+                      className={`text-sm font-semibold truncate ${
+                        isInProgress
+                          ? 'text-[var(--text-primary)] font-bold text-base'
+                          : 'text-[var(--text-primary)]'
+                      }`}
+                    >
                       {item.subject}
                     </h4>
+
+                    {isInProgress && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#30d158]/20 text-[#30d158] shrink-0">
+                        NOW
+                      </span>
+                    )}
+                    {isNext && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#2997ff]/15 text-[#2997ff] shrink-0">
+                        NEXT
+                      </span>
+                    )}
                     {item.isPersonal && (
-                      <span className="text-[9px] font-bold uppercase bg-[#30d158]/15 text-[#30d158] px-1.5 py-0.5 rounded border border-[#30d158]/30">
+                      <span className="text-[9px] font-medium tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-[var(--text-secondary)] border border-white/10 shrink-0">
                         Personal
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                    📍 {item.room} • {item.teacher}
+
+                  <p className="text-xs text-[var(--text-secondary)] truncate">
+                    {item.isPersonal ? (
+                      <span className="italic">Personal Activity</span>
+                    ) : (
+                      `Room ${item.room} • ${item.teacher}`
+                    )}
                   </p>
+
+                  {isInProgress && minutesLeft !== null && (
+                    <p className="text-[11px] font-bold text-[#30d158] mt-1">
+                      Ends in {minutesLeft} min
+                    </p>
+                  )}
                 </div>
-              </GlassCard>
+
+                {/* Type Tag */}
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+                    {item.type || 'Lecture'}
+                  </span>
+                </div>
+              </div>
             );
           })}
         </div>
       ) : (
-        <GlassCard className="text-center py-10 text-xs text-[var(--text-secondary)]">
+        <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
           No classes or events scheduled for {selectedDay}.
-        </GlassCard>
+        </div>
       )}
 
       {/* Personal Event Modal */}
