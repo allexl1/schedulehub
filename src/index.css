@@ -1,31 +1,51 @@
-/* Dark iOS Canvas */
 :root {
-  --bg-color: #090d16;
+  /* Colors */
+  --bg-main: #090d16;
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --accent-blue: #38bdf8;
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --accent-glow: rgba(56, 189, 248, 0.25);
+  
+  /* Glassmorphism Tokens */
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-bg-hover: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-active: rgba(56, 189, 248, 0.35);
+  --glass-blur: blur(20px);
+  
+  /* Safe Area Offsets for iOS Notch / Home Bar */
+  --safe-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
-  background-color: var(--bg-color);
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.12) 0%, transparent 50%),
-    radial-gradient(circle at 80% 40%, rgba(139, 92, 246, 0.08) 0%, transparent 40%);
-  color: var(--text-primary);
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.1) 0%, transparent 45%),
+    radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.06) 0%, transparent 40%);
+  color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Glass Card Helper */
+/* Glass Panel Utility Class */
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: 20px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel:active {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-active);
 }
