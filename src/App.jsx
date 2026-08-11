@@ -31,6 +31,7 @@ const FALLBACK_DATA = {
 export default function App() {
   const { user, triggerHaptic } = useTelegram();
   const [activeTab, setActiveTab] = useState('home');
+  const [group, setGroup] = useState(() => localStorage.getItem('sh_group') || '150501');
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
   const [scheduleData, setScheduleData] = useState(FALLBACK_DATA);
@@ -39,7 +40,7 @@ export default function App() {
     async function fetchSchedule() {
       try {
         setLoading(true);
-        const res = await fetch('/api/bsuir/schedule?group=150501');
+        const res = await fetch(`/api/bsuir/schedule?group=${group}`);
         
         if (res.status === 503) {
           throw new Error('BSUIR API is temporarily down (503 Service Unavailable).');
@@ -61,7 +62,7 @@ export default function App() {
       }
     }
     fetchSchedule();
-  }, []);
+  }, [group]);
 
   const { student, nextLesson, todaySchedule } = scheduleData;
   const displayName = user?.first_name || student.name;
@@ -78,7 +79,7 @@ export default function App() {
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Hello, {displayName} 👋</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary, #94a3b8)', margin: '4px 0 0 0' }}>
-            Group {student.group} • Week {student.currentWeek}
+            Group {group} • Week {student.currentWeek}
           </p>
         </div>
         <span style={{
@@ -116,11 +117,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Views */}
+      {/* 5-Tab Content Router */}
       <main>
+        {/* TAB 1: HOME DASHBOARD */}
         {activeTab === 'home' && (
           <div>
-            {/* Home Dashboard: Next Lesson + Today Overview */}
             {nextLesson && (
               <div style={{
                 background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.4), rgba(17, 24, 39, 0.6))',
@@ -163,6 +164,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 2: DEDICATED SCHEDULE VIEW */}
         {activeTab === 'schedule' && (
           <ScheduleView
             nextLesson={nextLesson}
@@ -171,12 +173,25 @@ export default function App() {
           />
         )}
 
+        {/* TAB 3: TEACHERS VIEW */}
         {activeTab === 'teachers' && <TeachersView />}
+
+        {/* TAB 4: EXAMS VIEW */}
         {activeTab === 'exams' && <ExamsView />}
-        {activeTab === 'settings' && <SettingsView />}
+
+        {/* TAB 5: SETTINGS VIEW */}
+        {activeTab === 'settings' && (
+          <SettingsView
+            group={group}
+            setGroup={(newGroup) => {
+              setGroup(newGroup);
+              localStorage.setItem('sh_group', newGroup);
+            }}
+          />
+        )}
       </main>
 
-      {/* 5-Item Glass Floating Navigation */}
+      {/* Floating Glass Navigation */}
       <FloatingNav activeTab={activeTab} setActiveTab={handleTabChange} />
     </div>
   );
