@@ -1,64 +1,39 @@
 import React, { useState } from 'react';
 
-const MOCK_SCHEDULE = {
-  days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-  activeDay: 'Mon',
-  week: 3,
-  lessons: [
-    { id: '1', time: '09:00 - 10:35', subject: 'Higher Mathematics', type: 'Lecture', room: '4-301', teacher: 'Prof. A. A. Ivanov', subgroup: 0 },
-    { id: '2', time: '10:50 - 12:25', subject: 'Physics', type: 'Practice', room: '2-110', teacher: 'Assoc. Prof. E. M. Petrov', subgroup: 1 },
-    { id: '3', time: '14:00 - 15:35', subject: 'Object-Oriented Programming', type: 'Lab', room: '5-204', teacher: 'Dr. V. I. Sidorov', subgroup: 1 },
-    { id: '4', time: '15:50 - 17:25', subject: 'Operating Systems', type: 'Lecture', room: '4-102', teacher: 'Dr. S. N. Kovalev', subgroup: 0 }
-  ]
-};
-
-export default function ScheduleView() {
-  const [selectedDay, setSelectedDay] = useState('Mon');
-  const [activeWeek, setActiveWeek] = useState(3);
+export default function ScheduleView({ nextLesson, todaySchedule, loading }) {
+  const [selectedDay, setSelectedDay] = useState('Today');
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
     <div>
-      {/* Week & Day Selector */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>Schedule</h2>
-        <div style={{ display: 'flex', gap: '6px', background: 'rgba(255, 255, 255, 0.05)', padding: '4px', borderRadius: '12px' }}>
-          {[1, 2, 3, 4].map(w => (
-            <button
-              key={w}
-              onClick={() => setActiveWeek(w)}
-              style={{
-                background: activeWeek === w ? 'var(--accent-blue, #38bdf8)' : 'transparent',
-                color: activeWeek === w ? '#000' : 'var(--text-secondary, #94a3b8)',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '4px 8px',
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              W{w}
-            </button>
-          ))}
-        </div>
+        <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0 }}>Timetable</h2>
+        <span style={{ fontSize: '12px', color: '#94a3b8' }}>Week 3</span>
       </div>
 
-      {/* Days Horizontal Scroll */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto', pb: '4px' }}>
-        {MOCK_SCHEDULE.days.map(day => (
+      {/* Day Selector Pills */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        overflowX: 'auto',
+        paddingBottom: '8px',
+        marginBottom: '16px',
+        scrollbarWidth: 'none'
+      }}>
+        {days.map((day) => (
           <button
             key={day}
             onClick={() => setSelectedDay(day)}
             style={{
-              flex: 1,
-              padding: '10px 0',
-              background: selectedDay === day ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-              border: `1px solid ${selectedDay === day ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.08)'}`,
-              borderRadius: '14px',
-              color: selectedDay === day ? 'var(--accent-blue, #38bdf8)' : 'var(--text-secondary, #94a3b8)',
+              background: selectedDay === day ? '#2563eb' : 'rgba(30, 41, 59, 0.6)',
+              color: selectedDay === day ? '#ffffff' : '#94a3b8',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '8px 14px',
+              borderRadius: '12px',
+              fontSize: '12px',
               fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
             }}
           >
             {day}
@@ -66,25 +41,59 @@ export default function ScheduleView() {
         ))}
       </div>
 
-      {/* Timetable List */}
-      <div>
-        {MOCK_SCHEDULE.lessons.map(lesson => (
-          <div key={lesson.id} className="glass-panel" style={{ padding: '16px', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--accent-blue, #38bdf8)', fontWeight: 600 }}>{lesson.time}</span>
-              <span style={{ fontSize: '10px', fontWeight: 700, background: 'rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: '6px' }}>
-                {lesson.type}
+      {/* Schedule List */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', fontSize: '13px' }}>
+          Loading timetable...
+        </div>
+      ) : todaySchedule && todaySchedule.length > 0 ? (
+        todaySchedule.map((lesson, idx) => (
+          <div key={idx} style={{
+            background: 'rgba(15, 23, 42, 0.6)',
+            border: '1px solid rgba(51, 65, 85, 0.5)',
+            borderRadius: '14px',
+            padding: '14px',
+            marginBottom: '10px',
+            display: 'flex',
+            gap: '12px'
+          }}>
+            <div style={{
+              borderRight: '1px solid rgba(51, 65, 85, 0.5)',
+              paddingRight: '12px',
+              textAlign: 'center',
+              minWidth: '65px'
+            }}>
+              <span style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#38bdf8' }}>
+                {lesson.time?.split(' - ')[0] || '09:00'}
+              </span>
+              <span style={{ display: 'block', fontSize: '10px', color: '#64748b' }}>
+                {lesson.time?.split(' - ')[1] || '10:20'}
               </span>
             </div>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 4px 0' }}>{lesson.subject}</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', margin: '0 0 10px 0' }}>{lesson.teacher}</p>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary, #94a3b8)' }}>
-              <span>📍 Room {lesson.room}</span>
-              <span>{lesson.subgroup ? `Subgroup ${lesson.subgroup}` : 'Entire Group'}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
+                {lesson.subject}
+              </div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                <span>📍 Room {lesson.room}</span>
+                <span>👨‍🏫 {lesson.teacher}</span>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+        ))
+      ) : (
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.4)',
+          border: '1px solid rgba(51, 65, 85, 0.3)',
+          borderRadius: '14px',
+          padding: '24px',
+          textAlign: 'center',
+          color: '#94a3b8',
+          fontSize: '13px'
+        }}>
+          No classes scheduled for this day.
+        </div>
+      )}
     </div>
   );
 }
