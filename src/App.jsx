@@ -5,7 +5,9 @@ import ScheduleView from './views/ScheduleView';
 import TeachersView from './views/TeachersView';
 import ExamsView from './views/ExamsView';
 import SettingsView from './views/SettingsView';
+import OnboardingView from './views/OnboardingView';
 import { useTelegram } from './hooks/useTelegram';
+import { useOffline } from './hooks/useOffline';
 
 const FALLBACK_DATA = {
   student: { name: "Alex", group: "150501", subgroup: 1, currentWeek: 3 },
@@ -31,12 +33,24 @@ const FALLBACK_DATA = {
 
 export default function App() {
   const { user, colorScheme, triggerHaptic } = useTelegram();
+  const isOffline = useOffline();
+
   const [activeTab, setActiveTab] = useState('home');
+  const [isOnboarded, setIsOnboarded] = useState(() => localStorage.getItem('sh_onboarded') === 'true');
   const [group, setGroup] = useState(() => localStorage.getItem('sh_group') || '150501');
+  const [subgroup, setSubgroup] = useState(() => Number(localStorage.getItem('sh_subgroup')) || 1);
   const [themeMode, setThemeMode] = useState(() => localStorage.getItem('sh_theme') || 'system');
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
-  const [scheduleData, setScheduleData] = useState(FALLBACK_DATA);
+
+  const [scheduleData, setScheduleData] = useState(() => {
+    const cached = localStorage.getItem('sh_cached_schedule');
+    return cached ? JSON.parse(cached) : FALLBACK_DATA;
+  });
+
+  const [lastUpdated, setLastUpdated] = useState(() => {
+    return localStorage.getItem('sh_cache_timestamp') || null;
+  });
 
   // Apply Theme Mode (System Auto-Detect, Light, or Dark)
   useEffect(() => {
@@ -47,9 +61,15 @@ export default function App() {
     root.classList.add(activeTheme);
   }, [themeMode, colorScheme]);
 
-  // Fetch BSUIR Schedule
+  // Fetch BSUIR Schedule with Offline Fallback & Cache Storage
   useEffect(() => {
     async function fetchSchedule() {
+      if (isOffline) {
+        setApiError('Device is offline. Showing cached data.');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const res = await fetch(`/api/bsuir/schedule?group=${group}`);
@@ -63,7 +83,12 @@ export default function App() {
         
         const json = await res.json();
         if (json.success && json.data) {
+          setScheduleData(json.data);
           setApiError(null);
+          const now = new Date().toISOString();
+          setLastUpdated(now);
+          localStorage.setItem('sh_cached_schedule', JSON.stringify(json.data));
+          localStorage.setItem('sh_cache_timestamp', now);
         } else {
           throw new Error(json.error || 'Failed to parse BSUIR payload');
         }
@@ -74,88 +99,87 @@ export default function App() {
       }
     }
     fetchSchedule();
-  }, [group]);
+  }, [group, isOffline]);
 
-  const { student, nextLesson, todaySchedule } = scheduleData;
-  const displayName = user?.first_name || student.name;
+  const handleOnboardingComplete = (newGroup, newSubgroup) => {
+    triggerHaptic('medium');
+    setGroup(newGroup);
+    setSubgroup(newSubgroup);
+    localStorage.setItem('sh_group', newGroup);
+    localStorage.setItem('sh_subgroup', newSubgroup);
+    localStorage.setItem('sh_onboarded', 'true');
+    setIsOnboarded(true);
+  };
 
   const handleTabChange = (tab) => {
     triggerHaptic('light');
     setActiveTab(tab);
   };
 
+  // Render Guided Onboarding Flow for First-Time Users
+  if (!isOnboarded) {
+    return (
+      <div className="max-w-[440px] mx-auto px-4">
+        <OnboardingView onComplete={handleOnboardingComplete} />
+      </div>
+    );
+  }
+
+  const { student, nextLesson, todaySchedule } = scheduleData;
+  const displayName = user?.first_name || student.name;
+  const statusState = isOffline ? 'offline' : apiError ? 'cached' : 'live';
+
   return (
-    <div style={{ maxWidth: '440px', margin: '0 auto', padding: '20px 16px 110px 16px' }}>
-      {/* Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+    <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
+      {/* App Header */}
+      <header className="flex justify-between items-center mb-4">
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Hello, {displayName} 👋</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary, #86868b)', margin: '4px 0 0 0' }}>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
+            Hello, {displayName} 👋
+          </h1>
+          <p className="text-xs font-medium text-[var(--text-secondary)] mt-0.5">
             Group {group} • Week {student.currentWeek}
           </p>
         </div>
-        <span style={{
-          fontSize: '11px',
-          fontWeight: 600,
-          padding: '4px 8px',
-          borderRadius: '20px',
-          background: 'rgba(41, 151, 255, 0.15)',
-          color: 'var(--accent-blue, #2997ff)',
-          border: '1px solid rgba(41, 151, 255, 0.3)'
-        }}>
-          Subgroup {student.subgroup}
+        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#2997ff]/10 text-[#2997ff] border border-[#2997ff]/20">
+          Subgroup {subgroup}
         </span>
       </header>
 
-      {/* Outage Banner */}
+      {/* Outage / Offline Alert Banner */}
       {apiError && (
-        <div style={{
-          background: 'rgba(245, 158, 11, 0.15)',
-          border: '1px solid rgba(245, 158, 11, 0.35)',
-          borderRadius: '14px',
-          padding: '10px 14px',
-          marginBottom: '18px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          fontSize: '12px',
-          color: '#f59e0b'
-        }}>
+        <div className="mb-4 rounded-2xl p-3 bg-[#f59e0b]/10 border border-[#f59e0b]/20 flex items-center gap-3 text-xs text-[#f59e0b]">
           <span>⚠️</span>
           <div>
-            <strong>BSUIR Outage Detected</strong>
-            <div style={{ fontSize: '11px', opacity: 0.85 }}>{apiError} Showing cached data.</div>
+            <strong className="block font-bold">
+              {isOffline ? 'Offline Mode Active' : 'BSUIR Outage Detected'}
+            </strong>
+            <span className="text-[11px] opacity-80">{apiError}</span>
           </div>
         </div>
       )}
 
       {/* 5-Tab Content Router */}
       <main>
-        {/* TAB 1: HOME DASHBOARD */}
         {activeTab === 'home' && (
           <HomeView
             scheduleData={scheduleData}
-            status={apiError ? 'cached' : 'live'}
-            lastUpdated="Cached copy"
+            status={statusState}
+            lastUpdatedTimestamp={lastUpdated}
           />
         )}
 
-        {/* TAB 2: DEDICATED SCHEDULE VIEW */}
         {activeTab === 'schedule' && (
           <ScheduleView
-            nextLesson={nextLesson}
             todaySchedule={todaySchedule}
             loading={loading}
           />
         )}
 
-        {/* TAB 3: TEACHERS VIEW */}
         {activeTab === 'teachers' && <TeachersView />}
 
-        {/* TAB 4: EXAMS VIEW */}
         {activeTab === 'exams' && <ExamsView />}
 
-        {/* TAB 5: SETTINGS VIEW */}
         {activeTab === 'settings' && (
           <SettingsView
             group={group}
