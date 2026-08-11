@@ -1,50 +1,74 @@
 import React from 'react';
-import GlassCard from '../common/GlassCard';
+
+// Helper function to calculate real minutes until class start
+function calculateMinutesUntil(timeString) {
+  if (!timeString) return null;
+  const startTimeStr = timeString.split(' - ')[0];
+  const [hours, minutes] = startTimeStr.split(':').map(Number);
+  
+  const now = new Date();
+  const classTime = new Date();
+  classTime.setHours(hours, minutes, 0, 0);
+
+  const diffMs = classTime - now;
+  if (diffMs <= 0) return 0;
+  return Math.round(diffMs / 60000);
+}
 
 export default function NextClassCard({ nextLesson }) {
   if (!nextLesson) {
     return (
-      <GlassCard className="mb-6 text-center py-6">
-        <span className="text-xs text-[var(--text-secondary)] font-medium">
+      <div className="mb-8 p-6 rounded-2xl bg-[var(--surface-glass)] text-center">
+        <span className="text-xs font-medium text-[var(--text-secondary)]">
           No remaining classes today
         </span>
-      </GlassCard>
+      </div>
     );
   }
 
+  // Calculate real countdown directly from lesson time data
+  const realMinutes = nextLesson.startsInMinutes ?? calculateMinutesUntil(nextLesson.time);
+
   return (
-    <div className="relative mb-6 rounded-2xl p-5 bg-gradient-to-b from-white/10 to-white/5 dark:from-white/5 dark:to-transparent border border-[var(--border-glass)] shadow-sm">
-      {/* Top Header Row */}
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[#2997ff] bg-[#2997ff]/10 px-2.5 py-1 rounded-md">
-          Starts in ~{nextLesson.startsInMinutes || 15}m
+    <div className="mb-8 p-6 rounded-2xl bg-[var(--surface-glass)]">
+      {/* Primary Hero Focal Point: Giant Countdown */}
+      <div className="mb-4">
+        <span className="block text-[10px] font-bold uppercase tracking-widest text-[#2997ff] mb-1">
+          Next Class
         </span>
-        <span className="text-xs font-semibold text-[var(--text-secondary)] font-mono">
-          {nextLesson.time}
-        </span>
+        <div className="flex items-baseline gap-2">
+          <span className="text-4xl font-extrabold tracking-tight text-[#2997ff]">
+            {realMinutes !== null ? `${realMinutes}m` : nextLesson.time.split(' - ')[0]}
+          </span>
+          {realMinutes !== null && (
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">
+              until start • {nextLesson.time}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Main Subject Focus */}
-      <h3 className="text-xl font-bold tracking-tight text-[var(--text-primary)] mb-4 leading-snug">
+      {/* Subject Name */}
+      <h3 className="text-xl font-bold tracking-tight text-[var(--text-primary)] mb-5">
         {nextLesson.subject}
       </h3>
 
-      {/* Structured Details Grid */}
-      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-[var(--border-glass)] text-xs">
+      {/* Info Grid (No Emojis, No Border Lines) */}
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <span className="block text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary, #8e8e93)] mb-0.5">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary, #8e8e93)] mb-1">
             Room
           </span>
-          <span className="font-semibold text-[var(--text-primary)]">
-            📍 {nextLesson.room}
+          <span className="text-sm font-semibold text-[var(--text-primary)] block">
+            {nextLesson.room}
           </span>
         </div>
         <div>
-          <span className="block text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary, #8e8e93)] mb-0.5">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary, #8e8e93)] mb-1">
             Teacher
           </span>
-          <span className="font-semibold text-[var(--text-primary)] truncate block">
-            👨‍🏫 {nextLesson.teacher}
+          <span className="text-sm font-semibold text-[var(--text-primary)] truncate block">
+            {nextLesson.teacher}
           </span>
         </div>
       </div>
