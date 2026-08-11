@@ -48,6 +48,17 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
     }
   };
 
+  const handleDeleteEvent = (eventId) => {
+    const updated = personalEvents.filter((ev) => ev.id !== eventId);
+    setPersonalEvents(updated);
+
+    try {
+      localStorage.setItem('sh_personal_events', JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed to delete personal event:', e);
+    }
+  };
+
   const isSelectedDayToday = selectedDay === todayDayName;
   const dayPersonalEvents = personalEvents.filter((ev) => ev.day === selectedDay);
 
@@ -230,11 +241,34 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
                   )}
                 </div>
 
-                {/* Type Tag */}
-                <div className="text-right shrink-0">
+                {/* Type Tag & Optional Personal Event Delete Action */}
+                <div className="text-right shrink-0 flex items-center gap-2">
                   <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     {item.type || 'Lecture'}
                   </span>
+                  {item.isPersonal && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEvent(item.id)}
+                      className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#ff3b30] hover:bg-white/10 transition-colors"
+                      title="Delete event"
+                      aria-label="Delete personal event"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
             );
