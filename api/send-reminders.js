@@ -45,14 +45,17 @@ async function sendTelegramMessage(chatId, text) {
 
 export default async function handler(req, res) {
   const authHeader = req.headers.authorization;
-  const querySecret = req.query.secret;
+  
+  // Clean hidden formatting, unicode symbols, or trailing spaces from query string
+  const rawQuerySecret = req.query.secret || '';
+  const cleanQuerySecret = rawQuerySecret.replace(/[^a-zA-Z0-9_]/g, '');
+
   const expectedSecret = process.env.CRON_SECRET;
   const HARDCODED_SECRET = 'schedulehub_secret_9988';
 
-  // Accept hardcoded secret or Vercel system CRON_SECRET
   const isAuthorized = 
-    querySecret === HARDCODED_SECRET ||
-    querySecret === expectedSecret ||
+    cleanQuerySecret === HARDCODED_SECRET ||
+    (expectedSecret && cleanQuerySecret === expectedSecret) ||
     authHeader === `Bearer ${HARDCODED_SECRET}` ||
     (expectedSecret && authHeader === `Bearer ${expectedSecret}`);
 
