@@ -44,7 +44,6 @@ export default function App() {
         if (res.status === 503) {
           throw new Error('BSUIR API is temporarily down (503 Service Unavailable).');
         }
-        
         if (!res.ok) {
           throw new Error(`Server returned HTTP status ${res.status}`);
         }
@@ -95,7 +94,7 @@ export default function App() {
         </span>
       </header>
 
-      {/* 503 / Offline Outage Banner */}
+      {/* Outage Banner */}
       {apiError && (
         <div style={{
           background: 'rgba(245, 158, 11, 0.15)',
@@ -117,21 +116,67 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Content Router */}
+      {/* Main Views */}
       <main>
         {activeTab === 'home' && (
+          <div>
+            {/* Home Dashboard: Next Lesson + Today Overview */}
+            {nextLesson && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.4), rgba(17, 24, 39, 0.6))',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: '16px',
+                padding: '16px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Next Class • Starts in ~{nextLesson.startsInMinutes}m
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{nextLesson.subject}</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  📍 Room {nextLesson.room} • 👨‍🏫 {nextLesson.teacher}
+                </div>
+              </div>
+            )}
+
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#94a3b8', marginBottom: '12px' }}>
+              Today's Overview
+            </h3>
+            {todaySchedule.map((item) => (
+              <div key={item.id} style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(51, 65, 85, 0.5)',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '10px',
+                display: 'flex',
+                justify: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600 }}>{item.subject}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>📍 {item.room} • {item.teacher}</div>
+                </div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#38bdf8' }}>{item.time}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'schedule' && (
           <ScheduleView
             nextLesson={nextLesson}
             todaySchedule={todaySchedule}
             loading={loading}
           />
         )}
+
         {activeTab === 'teachers' && <TeachersView />}
         {activeTab === 'exams' && <ExamsView />}
         {activeTab === 'settings' && <SettingsView />}
       </main>
 
-      {/* Floating Glass Navigation */}
+      {/* 5-Item Glass Floating Navigation */}
       <FloatingNav activeTab={activeTab} setActiveTab={handleTabChange} />
     </div>
   );
