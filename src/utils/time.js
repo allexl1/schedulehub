@@ -1,3 +1,21 @@
+export function calculateMinutesUntil(timeSlot, now = new Date()) {
+  const parts = parseTimeRange(timeSlot);
+  if (!parts) return null;
+
+  const [hours, minutes] = parts[0].split(':').map(Number);
+
+  if (isNaN(hours) || isNaN(minutes)) return null;
+
+  const startTime = new Date(now);
+  startTime.setHours(hours, minutes, 0, 0);
+
+  const diffMs = startTime.getTime() - now.getTime();
+
+  if (diffMs <= 0) return 0;
+
+  return Math.round(diffMs / 60000);
+}
+
 export function parseTimeRange(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return null;
   const normalized = timeStr.replace(/[–—]/g, '-').trim();
