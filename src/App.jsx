@@ -1,168 +1,202 @@
 import React, { useState, useEffect } from 'react';
-import FloatingNav from './components/FloatingNav';
-import ScheduleView from './views/ScheduleView';
-import TeachersView from './views/TeachersView';
-import ExamsView from './views/ExamsView';
-import SettingsView from './views/SettingsView';
-
-const FALLBACK_DATA = {
-  student: { name: "Alex", group: "150501", subgroup: 1, currentWeek: 3 },
-  nextLesson: {
-    subject: "Object-Oriented Programming",
-    type: "Lab",
-    time: "14:00 - 15:35",
-    room: "5-204",
-    teacher: "Dr. V. I. Sidorov",
-    startsInMinutes: 25
-  },
-  todaySchedule: [
-    { id: "1", subject: "Higher Mathematics", type: "Lecture", time: "09:00 - 10:35", room: "4-301", teacher: "Prof. A. A. Ivanov", status: "completed" },
-    { id: "2", subject: "Physics", type: "Practice", time: "10:50 - 12:25", room: "2-110", teacher: "Assoc. Prof. E. M. Petrov", status: "completed" },
-    { id: "3", subject: "Object-Oriented Programming", type: "Lab", time: "14:00 - 15:35", room: "5-204", teacher: "Dr. V. I. Sidorov", status: "next" },
-    { id: "4", subject: "Operating Systems", type: "Lecture", time: "15:50 - 17:25", room: "4-102", teacher: "Dr. S. N. Kovalev", status: "upcoming" }
-  ]
-};
+import { useTelegram } from './hooks/useTelegram';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home');
+  const { user, triggerHaptic, triggerNotification } = useTelegram();
+  
+  // State management
+  const [group, setGroup] = useState(() => localStorage.getItem('sh_group') || '150501');
+  const [inputGroup, setInputGroup] = useState(group);
+  const [activeTab, setActiveTab] = useState('schedule'); // 'schedule' | 'exams' | 'teachers'
+  const [scheduleData, setScheduleData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [apiError, setApiError] = useState(null); // Tracks 503 or connection errors
-  const [scheduleData, setScheduleData] = useState(FALLBACK_DATA);
+  const [error, setError] = useState(null);
+
+  // Fetch schedule from Vercel API
+  const fetchSchedule = async (targetGroup) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/bsuir/schedule?group=${targetGroup}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        setScheduleData(json.data);
+      } else {
+        setError(json.error || 'Failed to load schedule');
+      }
+    } catch (err) {
+      setError('Network error connecting to ScheduleHub API');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchSchedule() {
-      try {
-        setLoading(true);
-        const res = await fetch('/api/bsuir/schedule?group=150501');
-        
-        if (res.status === 503) {
-          throw new Error('BSUIR API is temporarily down (503 Service Unavailable).');
-        }
-        
-        if (!res.ok) {
-          throw new Error(`Server returned HTTP status ${res.status}`);
-        }
+    fetchSchedule(group);
+  }, [group]);
 
-        const json = await res.json();
-        if (json.success && json.data) {
-          // Live API data loaded successfully
-          setApiError(null);
-        } else {
-          throw new Error(json.error || 'Failed to parse BSUIR payload');
-        }
-      } catch (err) {
-        // Fall back to local cache/mock data on error
-        setApiError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
+  const handleGroupSubmit = (e) => {
+    e.preventDefault();
+    if (!inputGroup.trim()) return;
+    triggerHaptic('medium');
+    const cleaned = inputGroup.trim();
+    setGroup(cleaned);
+    localStorage.setItem('sh_group', cleaned);
+  };
 
-    fetchSchedule();
-  }, []);
+  const handleTabSwitch = (tab) => {
+    triggerHaptic('light');
+    setActiveTab(tab);
+  };
 
-  const { student, nextLesson, todaySchedule } = scheduleData;
+  const nextLesson = scheduleData?.nextLesson;
+  const todayLessons = scheduleData?.todaySchedules || [];
 
   return (
-    <div style={{ maxWidth: '440px', margin: '0 auto', padding: '20px 16px 110px 16px' }}>
-      {/* Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 pb-20 font-sans">
+      {/* Header & User Greeting */}
+      <header className="flex justify-between items-center mb-5 pt-2">
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Hello, {student.name} 👋</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary, #94a3b8)', margin: '4px 0 0 0' }}>
-            Group {student.group} · Subgroup {student.subgroup}
-          </p>
+          <h1 className="text-2xl font-black tracking-tight text-blue-500">
+            Schedule<span className="text-slate-100">Hub</span>
+          </h1>
+          <p className="text-xs text-slate-400">BSUIR Student Assistant</p>
         </div>
-        <span style={{ 
-          background: 'rgba(56, 189, 248, 0.12)', 
-          color: 'var(--accent-blue, #38bdf8)', 
-          border: '1px solid rgba(56, 189, 248, 0.3)', 
-          padding: '4px 12px', 
-          borderRadius: '16px', 
-          fontSize: '12px', 
-          fontWeight: 600 
-        }}>
-          Week {student.currentWeek}
-        </span>
+        {user ? (
+          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full text-xs font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>{user.first_name}</span>
+          </div>
+        ) : (
+          <span className="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full text-slate-400">
+            Web Mode
+          </span>
+        )}
       </header>
 
-      {/* 503 / Offline Outage Banner */}
-      {apiError && (
-        <div style={{
-          background: 'rgba(245, 158, 11, 0.15)',
-          border: '1px solid rgba(245, 158, 11, 0.35)',
-          borderRadius: '14px',
-          padding: '10px 14px',
-          marginBottom: '18px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          fontSize: '12px',
-          color: '#fbbf24'
-        }}>
-          <span>⚠️</span>
-          <div>
-            <strong>BSUIR Outage Detected</strong>
-            <div style={{ fontSize: '11px', opacity: 0.85 }}>{apiError} Showing cached data.</div>
+      {/* Group Selector Input */}
+      <form onSubmit={handleGroupSubmit} className="mb-5 flex gap-2">
+        <input
+          type="text"
+          value={inputGroup}
+          onChange={(e) => setInputGroup(e.target.value)}
+          placeholder="Group (e.g. 150501)"
+          className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-blue-500 transition-colors"
+        />
+        <button
+          type="submit"
+          className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors active:scale-95"
+        >
+          Save
+        </button>
+      </form>
+
+      {/* Next Class Alert Banner */}
+      {nextLesson && (
+        <div className="mb-5 bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 rounded-2xl p-4 shadow-lg backdrop-blur-sm">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-400 bg-blue-950/80 px-2.5 py-0.5 rounded-md border border-blue-500/30">
+              Starts in ~15 mins
+            </span>
+            <span className="text-xs font-bold text-slate-300">{nextLesson.time}</span>
+          </div>
+          <h3 className="text-base font-bold text-slate-100">{nextLesson.subject}</h3>
+          <div className="flex justify-between items-center mt-2 text-xs text-slate-300">
+            <span>📍 Room: <strong className="text-white">{nextLesson.room}</strong></span>
+            <span>👨‍🏫 {nextLesson.teacher}</span>
           </div>
         </div>
       )}
 
-      {/* Main Content Router */}
-      <main>
-        {activeTab === 'home' && (
-          <div>
-            <section className="glass-panel" style={{ padding: '20px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span style={{ background: '#f43f5e', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px' }}>
-                  {nextLesson.type}
-                </span>
-                <span style={{ fontSize: '12px', color: 'var(--accent-blue, #38bdf8)', fontWeight: 600 }}>
-                  In {nextLesson.startsInMinutes} mins
-                </span>
-              </div>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px 0' }}>{nextLesson.subject}</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary, #94a3b8)', margin: '0 0 14px 0' }}>{nextLesson.teacher}</p>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
-                <span>⏰ {nextLesson.time}</span>
-                <span>📍 Room {nextLesson.room}</span>
-              </div>
-            </section>
+      {/* Main Navigation Tabs */}
+      <div className="flex bg-slate-900 border border-slate-800 p-1 rounded-xl mb-5">
+        {['schedule', 'exams', 'teachers'].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => handleTabSwitch(tab)}
+            className={`flex-1 py-2 text-xs font-bold capitalize rounded-lg transition-all ${
+              activeTab === tab
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
-            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>Today's Schedule</h3>
-            {todaySchedule.map(lesson => (
-              <div 
-                key={lesson.id} 
-                className="glass-panel" 
-                style={{ 
-                  display: 'flex', 
-                  justify: 'space-between', 
-                  alignItems: 'center', 
-                  padding: '14px 16px', 
-                  marginBottom: '10px', 
-                  opacity: lesson.status === 'completed' ? 0.4 : 1 
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600 }}>{lesson.subject}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
-                    {lesson.time} · Room {lesson.room}
-                  </div>
+      {/* Main Content Area */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+          <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+          <p className="text-xs font-medium">Fetching BSUIR schedule...</p>
+        </div>
+      ) : error ? (
+        <div className="bg-rose-950/30 border border-rose-500/30 rounded-xl p-4 text-center">
+          <p className="text-xs font-medium text-rose-400 mb-2">{error}</p>
+          <button
+            onClick={() => fetchSchedule(group)}
+            className="text-xs bg-rose-900/50 text-rose-200 px-3 py-1.5 rounded-lg border border-rose-700/50"
+          >
+            Try Again
+          </button>
+        </div>
+      ) : (
+        <div>
+          {activeTab === 'schedule' && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Today's Classes ({todayLessons.length})
+              </h2>
+
+              {todayLessons.length === 0 ? (
+                <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-6 text-center text-slate-400">
+                  <p className="text-sm font-medium">🎉 No classes scheduled for today!</p>
                 </div>
-                <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent-blue, #38bdf8)' }}>{lesson.type}</span>
-              </div>
-            ))}
-          </div>
-        )}
+              ) : (
+                todayLessons.map((item, index) => (
+                  <div
+                    key={index}
+                    className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex gap-4 items-center"
+                  >
+                    <div className="text-center border-r border-slate-800 pr-4 min-w-[65px]">
+                      <span className="block text-xs font-bold text-blue-400">{item.startLessonTime || '09:00'}</span>
+                      <span className="block text-[10px] text-slate-500">{item.endLessonTime || '10:20'}</span>
+                    </div>
 
-        {activeTab === 'schedule' && <ScheduleView />}
-        {activeTab === 'teachers' && <TeachersView />}
-        {activeTab === 'exams' && <ExamsView />}
-        {activeTab === 'settings' && <SettingsView />}
-      </main>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-slate-100">{item.subject}</span>
+                        <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">
+                          {item.lessonTypeAbbrev || 'Lecture'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-400">
+                        <span>📍 {item.auditories?.[0] || 'N/A'}</span>
+                        <span>👨‍🏫 {item.employees?.[0]?.fio || 'Faculty'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
 
-      <FloatingNav activeTab={activeTab} setActiveTab={setActiveTab} />
+          {activeTab === 'exams' && (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 text-center text-slate-400">
+              <p className="text-sm font-medium mb-1">📋 Exam Timetable</p>
+              <p className="text-xs text-slate-500">Exams for group {group} will appear here during examination sessions.</p>
+            </div>
+          )}
+
+          {activeTab === 'teachers' && (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 text-center text-slate-400">
+              <p className="text-sm font-medium mb-1">🔍 Faculty Lookup</p>
+              <p className="text-xs text-slate-500">Search BSUIR professors and view department schedules.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-
