@@ -1,13 +1,11 @@
 import React from 'react';
 import NextClassCard from '../components/home/NextClassCard';
 import StatusPill from '../components/home/StatusPill';
-import GlassCard from '../components/common/GlassCard';
 import { formatCacheAge } from '../utils/formatCacheTime';
 
 export default function HomeView({ scheduleData, status = 'live', lastUpdatedTimestamp }) {
   const { student, nextLesson, todaySchedule } = scheduleData || {};
 
-  // Date Formatting: e.g. "Monday" & "11 August"
   const now = new Date();
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
   const dayMonth = now.toLocaleDateString('en-US', { day: 'numeric', month: 'long' });
@@ -30,10 +28,10 @@ export default function HomeView({ scheduleData, status = 'live', lastUpdatedTim
         </div>
       </header>
 
-      {/* Primary Visual Focal Point: Apple Wallet Hero Pass */}
+      {/* Hero Pass with Giant Countdown */}
       <NextClassCard nextLesson={nextLesson} />
 
-      {/* Reminders-Style Grouped Schedule List */}
+      {/* Today's Schedule Overview */}
       <div className="mb-3">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
           Today's Schedule ({todaySchedule?.length || 0})
@@ -41,19 +39,23 @@ export default function HomeView({ scheduleData, status = 'live', lastUpdatedTim
       </div>
 
       {!todaySchedule || todaySchedule.length === 0 ? (
-        <GlassCard className="text-center py-8 text-[var(--text-secondary)] text-xs">
+        <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
           No classes on today's timetable.
-        </GlassCard>
+        </div>
       ) : (
-        <div className="liquid-glass rounded-2xl overflow-hidden divide-y divide-[var(--border-glass)]">
+        /* Whitespace-Driven Grouped List (No Interior Borders) */
+        <div className="space-y-3">
           {todaySchedule.map((item, idx) => (
-            <div key={item.id || idx} className="p-3.5 flex justify-between items-center">
+            <div
+              key={item.id || idx}
+              className="p-4 rounded-2xl bg-[var(--surface-glass)] flex justify-between items-center"
+            >
               <div className="pr-3 min-w-0">
-                <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate mb-0.5">
+                <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate mb-1">
                   {item.subject}
                 </h4>
-                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
-                  <span>📍 {item.room}</span>
+                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-2">
+                  <span>Room {item.room}</span>
                   <span>•</span>
                   <span className="truncate">{item.teacher}</span>
                 </p>
