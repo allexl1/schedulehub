@@ -1,22 +1,42 @@
 @import "tailwindcss";
 
 @layer base {
-  :root {
+  /* Default / Dark Theme Tokens */
+  :root, :root.dark {
     --bg-main: #000000;
-    --surface-glass: rgba(255, 255, 255, 0.05);
-    --surface-glass-hover: rgba(255, 255, 255, 0.08);
-    --surface-glass-active: rgba(255, 255, 255, 0.12);
-    --border-glass: rgba(255, 255, 255, 0.1);
-    --border-glass-strong: rgba(255, 255, 255, 0.18);
-    
+    --surface-glass: rgba(255, 255, 255, 0.06);
+    --surface-glass-hover: rgba(255, 255, 255, 0.1);
+    --surface-glass-active: rgba(255, 255, 255, 0.15);
+    --border-glass: rgba(255, 255, 255, 0.12);
+    --shadow-glass: rgba(0, 0, 0, 0.5);
+
     --text-primary: #f5f5f7;
     --text-secondary: #86868b;
     --text-tertiary: #6e6e73;
-    
+
     --accent-blue: #2997ff;
     --accent-amber: #f59e0b;
     --accent-emerald: #30d158;
     --accent-rose: #ff453a;
+  }
+
+  /* Apple iOS Light Theme Tokens */
+  :root.light {
+    --bg-main: #f2f2f7;
+    --surface-glass: rgba(255, 255, 255, 0.75);
+    --surface-glass-hover: rgba(255, 255, 255, 0.85);
+    --surface-glass-active: rgba(255, 255, 255, 0.95);
+    --border-glass: rgba(0, 0, 0, 0.08);
+    --shadow-glass: rgba(0, 0, 0, 0.06);
+
+    --text-primary: #1c1c1e;
+    --text-secondary: #6c6c70;
+    --text-tertiary: #8e8e93;
+
+    --accent-blue: #007aff;
+    --accent-amber: #d97706;
+    --accent-emerald: #28cd41;
+    --accent-rose: #ff3b30;
   }
 
   body {
@@ -25,23 +45,25 @@
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.3s ease, color 0.3s ease;
     user-select: none;
   }
 }
 
-/* Liquid Glass Utilities */
 .liquid-glass {
   background: var(--surface-glass);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(25px) saturate(190%);
+  -webkit-backdrop-filter: blur(25px) saturate(190%);
   border: 1px solid var(--border-glass);
+  box-shadow: 0 8px 32px 0 var(--shadow-glass);
 }
 
 .liquid-glass-interactive {
   background: var(--surface-glass);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(25px) saturate(190%);
+  -webkit-backdrop-filter: blur(25px) saturate(190%);
   border: 1px solid var(--border-glass);
+  box-shadow: 0 8px 32px 0 var(--shadow-glass);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
