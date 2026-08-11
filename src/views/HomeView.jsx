@@ -14,7 +14,7 @@ export default function HomeView({ scheduleData, status = 'live', lastUpdatedTim
 
   return (
     <div className="pt-2">
-      {/* Date-First Header Hierarchy */}
+      {/* Date-First Typography Header */}
       <header className="mb-6">
         <h1 className="text-3xl font-extrabold tracking-tight text-[var(--text-primary)] mb-1">
           {dayName}
@@ -28,7 +28,7 @@ export default function HomeView({ scheduleData, status = 'live', lastUpdatedTim
         </div>
       </header>
 
-      {/* Hero Pass with Giant Countdown */}
+      {/* Hero Pass */}
       <NextClassCard nextLesson={nextLesson} />
 
       {/* Today's Schedule Overview */}
@@ -43,12 +43,12 @@ export default function HomeView({ scheduleData, status = 'live', lastUpdatedTim
           No classes on today's timetable.
         </div>
       ) : (
-        /* Whitespace-Driven Grouped List (No Interior Borders) */
-        <div className="space-y-3">
+        /* Single Grouped Reminders-Style Container */
+        <div className="bg-[var(--surface-glass)] rounded-2xl overflow-hidden divide-y divide-[var(--border-glass)]">
           {todaySchedule.map((item, idx) => (
             <div
               key={item.id || idx}
-              className="p-4 rounded-2xl bg-[var(--surface-glass)] flex justify-between items-center"
+              className="p-4 flex justify-between items-center"
             >
               <div className="pr-3 min-w-0">
                 <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate mb-1">
@@ -61,7 +61,7 @@ export default function HomeView({ scheduleData, status = 'live', lastUpdatedTim
                 </p>
               </div>
               <div className="text-right shrink-0">
-                <span className="text-xs font-bold text-[#2997ff] font-mono block">
+                <span className="text-xs font-bold text-[var(--text-primary)] font-mono block">
                   {item.time}
                 </span>
                 <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
