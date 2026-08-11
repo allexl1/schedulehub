@@ -14,103 +14,79 @@ function getRedisCredentials() {
   return { url, token };
 }
 
-async function redisSMembers(key) {
+async function getRedisCache(key) {
   const { url, token } = getRedisCredentials();
-  if (!url || !token) return [];
+  if (!url || !token) return null;
+
   try {
-    const res = await fetch(`${url}/smembers/${key}`, {
+    const res = await fetch(`${url}/get/${key}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
-    return data.result || [];
-  } catch (e) {
-    return [];
+    return data.result ? JSON.parse(data.result) : null;
+  } catch {
+    return null;
   }
 }
 
-async function sendTelegramMessage(chatId, text) {
-  const token = process.env.BOT_TOKEN;
-  if (!token) return;
+async function setRedisCache(key, value, ttlSeconds = 86400) {
+  const { url, token } = getRedisCredentials();
+  if (!url || !token) return;
 
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text,
-      parse_mode: 'HTML'
-    })
-  });
+  try {
+    await fetch(`${url}/set/${key}/${encodeURIComponent(JSON.stringify(value))}?ex=${ttlSeconds}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+  } catch {
+    // Fail silently
+  }
 }
 
 export default async function handler(req, res) {
-  const authHeader = req.headers.authorization;
-  
-  const rawQuerySecret = req.query.secret || '';
-  const cleanQuerySecret = rawQuerySecret.replace(/[^a-zA-Z0-9_]/g, '');
-
-  const expectedSecret = process.env.CRON_SECRET;
-  const HARDCODED_SECRET = 'schedulehub_secret_9988';
-
-  const isAuthorized = 
-    cleanQuerySecret === HARDCODED_SECRET ||
-    (expectedSecret && cleanQuerySecret === expectedSecret) ||
-    authHeader === `Bearer ${HARDCODED_SECRET}` ||
-    (expectedSecret && authHeader === `Bearer ${expectedSecret}`);
-
-  if (!isAuthorized) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid CRON_SECRET' });
-  }
+  res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=86400');
 
   try {
-    const host = req.headers.host;
-    const protocol = host.includes('localhost') ? 'http' : 'https';
-    
-    const scheduleRes = await fetch(`${protocol}://${host}/api/bsuir/schedule?group=150501`);
-    const rawText = await scheduleRes.text();
+    const group = req.query.group || '150501';
+    const cacheKey = `schedule:${group}`;
 
-    let scheduleData;
+    let scheduleData = null;
+    let isFromCache = false;
+
+    // 1. Fetch fresh schedule from official BSUIR API
     try {
-      scheduleData = JSON.parse(rawText);
-    } catch (parseErr) {
-      return res.status(502).json({
-        error: 'Schedule API returned non-JSON response',
-        status: scheduleRes.status,
-        responsePreview: rawText.slice(0, 120)
-      });
-    }
-
-    if (!scheduleData.success || !scheduleData.data?.nextLesson) {
-      return res.status(200).json({ status: 'No upcoming lesson found', data: scheduleData });
-    }
-
-    const next = scheduleData.data.nextLesson;
-    
-    if (next.startsInMinutes >= 10 && next.startsInMinutes <= 20) {
-      const subscribers = await redisSMembers('bot:subscribers');
-
-      const message = `⏰ <b>Class Reminder — Starts in ~15 mins</b>\n\n` +
-                      `📖 <b>${next.subject}</b> (${next.type})\n` +
-                      `📍 Room: <b>${next.room}</b>\n` +
-                      `👨‍🏫 Teacher: ${next.teacher}\n` +
-                      `🕒 Time: ${next.time}`;
-
-      for (const chatId of subscribers) {
-        await sendTelegramMessage(chatId, message);
+      const bsuirRes = await fetch(`https://iis.bsuir.by/api/v1/schedule?studentGroup=${group}`);
+      if (bsuirRes.ok) {
+        scheduleData = await bsuirRes.json();
+        await setRedisCache(cacheKey, scheduleData, 86400);
       }
+    } catch (err) {
+      console.error('BSUIR API fetch error:', err);
+    }
 
-      return res.status(200).json({ 
-        success: true, 
-        sentToCount: subscribers.length,
-        lesson: next.subject 
+    // 2. Fall back to Upstash Redis cache if BSUIR API fails
+    if (!scheduleData) {
+      scheduleData = await getRedisCache(cacheKey);
+      isFromCache = true;
+    }
+
+    if (!scheduleData) {
+      return res.status(200).json({
+        success: false,
+        error: 'Unable to fetch schedule from BSUIR API or Redis cache',
+        data: null
       });
     }
 
-    return res.status(200).json({ 
-      status: 'No 15-minute alert needed right now', 
-      startsInMinutes: next.startsInMinutes 
+    return res.status(200).json({
+      success: true,
+      cached: isFromCache,
+      data: scheduleData
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(200).json({
+      success: false,
+      error: error.message || 'Server error processing schedule',
+      data: null
+    });
   }
 }
