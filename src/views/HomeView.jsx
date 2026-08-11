@@ -2,12 +2,11 @@ import React from 'react';
 import NextClassCard from '../components/home/NextClassCard';
 import StatusPill from '../components/home/StatusPill';
 import GlassCard from '../components/common/GlassCard';
-import Icon from '../common/Icon';
+import Icon from '../components/common/Icon';
 
 export default function HomeView({ scheduleData, status = 'live', lastUpdated }) {
   const { student, nextLesson, todaySchedule } = scheduleData || {};
 
-  // Formatted iOS Date Header
   const todayDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     day: 'numeric',
