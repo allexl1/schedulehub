@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { isValidTimeSlot } from '../../utils/time';
 
 export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
   const [title, setTitle] = useState('');
   const [type, setType] = useState('Study');
   const [time, setTime] = useState('16:00 - 17:30');
   const [day, setDay] = useState('Mon');
+  const [timeError, setTimeError] = useState('');
 
   if (!isOpen) return null;
 
@@ -12,6 +14,12 @@ export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
     e.preventDefault();
     if (!title.trim()) return;
 
+    if (!isValidTimeSlot(time)) {
+      setTimeError('Invalid format. Use "HH:MM - HH:MM" (e.g. 14:00 - 15:30)');
+      return;
+    }
+
+    setTimeError('');
     onAddEvent({
       id: Date.now(),
       subject: title.trim(),
@@ -33,7 +41,10 @@ export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
         <div className="flex justify-between items-center pb-3 mb-4 border-b border-[var(--border-glass)]">
           <h3 className="text-sm font-bold text-[var(--text-primary)]">Add Personal Event</h3>
           <button
-            onClick={onClose}
+            onClick={() => {
+              setTimeError('');
+              onClose();
+            }}
             className="text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
           >
             Cancel
@@ -95,15 +106,26 @@ export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
               type="text"
               placeholder="16:00 - 17:30"
               value={time}
-              onChange={(e) => setTime(e.target.value)}
+              onChange={(e) => {
+                setTime(e.target.value);
+                if (timeError) setTimeError('');
+              }}
               className="w-full bg-black/10 dark:bg-white/5 border border-[var(--border-glass)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] outline-none focus:border-[#2997ff]"
             />
+            {timeError && (
+              <p className="text-[11px] font-medium text-[#ff3b30] mt-1">
+                {timeError}
+              </p>
+            )}
           </div>
 
           <div className="pt-2 flex gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                setTimeError('');
+                onClose();
+              }}
               className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-[var(--text-secondary)] bg-black/10 dark:bg-white/5"
             >
               Cancel
