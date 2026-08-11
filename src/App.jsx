@@ -10,7 +10,7 @@ import { useTelegram } from './hooks/useTelegram';
 import { useOffline } from './hooks/useOffline';
 
 const FALLBACK_DATA = {
-  student: { name: "Alex", group: "150501", subgroup: 1, currentWeek: 3 },
+  student: { name: "Alex", group: "150501", subgroup: 1, currentWeek: 2 },
   nextLesson: {
     subject: "Object-Oriented Programming",
     type: "Lecture",
@@ -43,9 +43,18 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
 
+  // Safe Cache Initialization
   const [scheduleData, setScheduleData] = useState(() => {
-    const cached = localStorage.getItem('sh_cached_schedule');
-    return cached ? JSON.parse(cached) : FALLBACK_DATA;
+    try {
+      const cached = localStorage.getItem('sh_cached_schedule');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to load cached schedule:', e);
+    }
+    return FALLBACK_DATA;
   });
 
   const [lastUpdated, setLastUpdated] = useState(() => {
@@ -61,7 +70,7 @@ export default function App() {
     root.classList.add(activeTheme);
   }, [themeMode, colorScheme]);
 
-  // Fetch BSUIR Schedule with Offline Fallback & Cache Storage
+  // Fetch BSUIR Schedule Data Safely
   useEffect(() => {
     async function fetchSchedule() {
       if (isOffline) {
@@ -125,8 +134,14 @@ export default function App() {
     );
   }
 
-  const { student, nextLesson, todaySchedule } = scheduleData;
-  const displayName = user?.first_name || student.name;
+  // Safe Property Extraction with Fallbacks
+  const student = scheduleData?.student || FALLBACK_DATA.student;
+  const nextLesson = scheduleData?.nextLesson || FALLBACK_DATA.nextLesson;
+  const todaySchedule = Array.isArray(scheduleData?.todaySchedule)
+    ? scheduleData.todaySchedule
+    : FALLBACK_DATA.todaySchedule;
+
+  const displayName = user?.first_name || student?.name || "Student";
   const statusState = isOffline ? 'offline' : apiError ? 'cached' : 'live';
 
   return (
@@ -138,7 +153,7 @@ export default function App() {
             Hello, {displayName} 👋
           </h1>
           <p className="text-xs font-medium text-[var(--text-secondary)] mt-0.5">
-            Group {group} • Week {student.currentWeek}
+            Group {group} • Week {student?.currentWeek || 1}
           </p>
         </div>
         <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#2997ff]/10 text-[#2997ff] border border-[#2997ff]/20">
@@ -163,7 +178,7 @@ export default function App() {
       <main>
         {activeTab === 'home' && (
           <HomeView
-            scheduleData={scheduleData}
+            scheduleData={{ student, nextLesson, todaySchedule }}
             status={statusState}
             lastUpdatedTimestamp={lastUpdated}
           />
