@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import FloatingNav from './components/FloatingNav';
+import HomeView from './views/HomeView';
 import ScheduleView from './views/ScheduleView';
 import TeachersView from './views/TeachersView';
 import ExamsView from './views/ExamsView';
@@ -29,13 +30,24 @@ const FALLBACK_DATA = {
 };
 
 export default function App() {
-  const { user, triggerHaptic } = useTelegram();
+  const { user, colorScheme, triggerHaptic } = useTelegram();
   const [activeTab, setActiveTab] = useState('home');
   const [group, setGroup] = useState(() => localStorage.getItem('sh_group') || '150501');
+  const [themeMode, setThemeMode] = useState(() => localStorage.getItem('sh_theme') || 'system');
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
   const [scheduleData, setScheduleData] = useState(FALLBACK_DATA);
 
+  // Apply Theme Mode (System Auto-Detect, Light, or Dark)
+  useEffect(() => {
+    const root = document.documentElement;
+    const activeTheme = themeMode === 'system' ? (colorScheme || 'dark') : themeMode;
+
+    root.classList.remove('light', 'dark');
+    root.classList.add(activeTheme);
+  }, [themeMode, colorScheme]);
+
+  // Fetch BSUIR Schedule
   useEffect(() => {
     async function fetchSchedule() {
       try {
@@ -78,7 +90,7 @@ export default function App() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Hello, {displayName} 👋</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary, #94a3b8)', margin: '4px 0 0 0' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary, #86868b)', margin: '4px 0 0 0' }}>
             Group {group} • Week {student.currentWeek}
           </p>
         </div>
@@ -87,9 +99,9 @@ export default function App() {
           fontWeight: 600,
           padding: '4px 8px',
           borderRadius: '20px',
-          background: 'rgba(59, 130, 246, 0.15)',
-          color: '#60a5fa',
-          border: '1px solid rgba(59, 130, 246, 0.3)'
+          background: 'rgba(41, 151, 255, 0.15)',
+          color: 'var(--accent-blue, #2997ff)',
+          border: '1px solid rgba(41, 151, 255, 0.3)'
         }}>
           Subgroup {student.subgroup}
         </span>
@@ -107,7 +119,7 @@ export default function App() {
           alignItems: 'center',
           gap: '10px',
           fontSize: '12px',
-          color: '#fbbf24'
+          color: '#f59e0b'
         }}>
           <span>⚠️</span>
           <div>
@@ -121,47 +133,11 @@ export default function App() {
       <main>
         {/* TAB 1: HOME DASHBOARD */}
         {activeTab === 'home' && (
-          <div>
-            {nextLesson && (
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.4), rgba(17, 24, 39, 0.6))',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: '16px',
-                padding: '16px',
-                marginBottom: '20px'
-              }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', marginBottom: '6px' }}>
-                  Next Class • Starts in ~{nextLesson.startsInMinutes}m
-                </div>
-                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{nextLesson.subject}</div>
-                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                  📍 Room {nextLesson.room} • 👨‍🏫 {nextLesson.teacher}
-                </div>
-              </div>
-            )}
-
-            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#94a3b8', marginBottom: '12px' }}>
-              Today's Overview
-            </h3>
-            {todaySchedule.map((item) => (
-              <div key={item.id} style={{
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(51, 65, 85, 0.5)',
-                borderRadius: '12px',
-                padding: '12px 14px',
-                marginBottom: '10px',
-                display: 'flex',
-                justify: 'space-between',
-                alignItems: 'center'
-              }}>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600 }}>{item.subject}</div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>📍 {item.room} • {item.teacher}</div>
-                </div>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#38bdf8' }}>{item.time}</div>
-              </div>
-            ))}
-          </div>
+          <HomeView
+            scheduleData={scheduleData}
+            status={apiError ? 'cached' : 'live'}
+            lastUpdated="Cached copy"
+          />
         )}
 
         {/* TAB 2: DEDICATED SCHEDULE VIEW */}
@@ -186,6 +162,11 @@ export default function App() {
             setGroup={(newGroup) => {
               setGroup(newGroup);
               localStorage.setItem('sh_group', newGroup);
+            }}
+            themeMode={themeMode}
+            setThemeMode={(newTheme) => {
+              setThemeMode(newTheme);
+              localStorage.setItem('sh_theme', newTheme);
             }}
           />
         )}
