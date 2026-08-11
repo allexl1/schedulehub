@@ -1,99 +1,142 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import GlassCard from '../components/common/GlassCard';
+import PersonalEventModal from '../components/schedule/PersonalEventModal';
 
-export default function ScheduleView({ nextLesson, todaySchedule, loading }) {
-  const [selectedDay, setSelectedDay] = useState('Today');
+export default function ScheduleView({ todaySchedule = [], loading }) {
+  const [selectedDay, setSelectedDay] = useState('Mon');
+  const [viewMode, setViewMode] = useState('day'); // 'day' | 'week'
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [personalEvents, setPersonalEvents] = useState(() => {
+    return JSON.parse(localStorage.getItem('sh_personal_events') || '[]');
+  });
+
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  const handleAddEvent = (newEvent) => {
+    const updated = [...personalEvents, newEvent];
+    setPersonalEvents(updated);
+    localStorage.setItem('sh_personal_events', JSON.stringify(updated));
+  };
+
+  // Merge BSUIR timetable schedule with personal events
+  const dayPersonalEvents = personalEvents.filter((ev) => ev.day === selectedDay);
+  const combinedSchedule = [...todaySchedule, ...dayPersonalEvents];
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0 }}>Timetable</h2>
-        <span style={{ fontSize: '12px', color: '#94a3b8' }}>Week 3</span>
+    <div className="space-y-4">
+      {/* View Header & Mode Toggle */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">Schedule</h2>
+          <p className="text-xs text-[var(--text-secondary)]">Week 2 • Academic Timetable</p>
+        </div>
+
+        <div className="flex items-center gap-1.5 p-1 bg-black/10 dark:bg-white/5 rounded-xl border border-[var(--border-glass)]">
+          <button
+            onClick={() => setViewMode('day')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+              viewMode === 'day' ? 'bg-[#2997ff] text-white shadow-sm' : 'text-[var(--text-secondary)]'
+            }`}
+          >
+            Day
+          </button>
+          <button
+            onClick={() => setViewMode('week')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+              viewMode === 'week' ? 'bg-[#2997ff] text-white shadow-sm' : 'text-[var(--text-secondary)]'
+            }`}
+          >
+            Week
+          </button>
+        </div>
       </div>
 
-      {/* Day Selector Pills */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        overflowX: 'auto',
-        paddingBottom: '8px',
-        marginBottom: '16px',
-        scrollbarWidth: 'none'
-      }}>
+      {/* Day Selector */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
         {days.map((day) => (
           <button
             key={day}
             onClick={() => setSelectedDay(day)}
-            style={{
-              background: selectedDay === day ? '#2563eb' : 'rgba(30, 41, 59, 0.6)',
-              color: selectedDay === day ? '#ffffff' : '#94a3b8',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '8px 14px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
-            }}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+              selectedDay === day
+                ? 'bg-[#2997ff] text-white shadow-md'
+                : 'liquid-glass text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
           >
             {day}
           </button>
         ))}
       </div>
 
-      {/* Schedule List */}
+      {/* Action Bar */}
+      <div className="flex justify-between items-center pt-1">
+        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+          {selectedDay} Classes ({combinedSchedule.length})
+        </span>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="text-xs font-semibold text-[#2997ff] bg-[#2997ff]/10 border border-[#2997ff]/20 px-2.5 py-1 rounded-lg"
+        >
+          + Add Event
+        </button>
+      </div>
+
+      {/* Timetable List */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', fontSize: '13px' }}>
+        <GlassCard className="text-center py-8 text-xs text-[var(--text-secondary)]">
           Loading timetable...
+        </GlassCard>
+      ) : combinedSchedule.length > 0 ? (
+        <div className="space-y-2.5">
+          {combinedSchedule.map((item, idx) => {
+            const isFirst = idx === 0; // Highlight current/next class
+            return (
+              <GlassCard
+                key={idx}
+                className={`flex gap-3 items-center ${
+                  isFirst ? 'border-l-4 border-l-[#2997ff]' : ''
+                }`}
+              >
+                <div className="text-center pr-3 border-r border-[var(--border-glass)] min-w-[65px]">
+                  <span className="block text-xs font-bold text-[#2997ff]">
+                    {item.time?.split(' - ')[0] || '09:00'}
+                  </span>
+                  <span className="block text-[10px] text-[var(--text-secondary)]">
+                    {item.time?.split(' - ')[1] || '10:20'}
+                  </span>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                      {item.subject}
+                    </h4>
+                    {item.isPersonal && (
+                      <span className="text-[9px] font-bold uppercase bg-[#30d158]/15 text-[#30d158] px-1.5 py-0.5 rounded border border-[#30d158]/30">
+                        Personal
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                    📍 {item.room} • {item.teacher}
+                  </p>
+                </div>
+              </GlassCard>
+            );
+          })}
         </div>
-      ) : todaySchedule && todaySchedule.length > 0 ? (
-        todaySchedule.map((lesson, idx) => (
-          <div key={idx} style={{
-            background: 'rgba(15, 23, 42, 0.6)',
-            border: '1px solid rgba(51, 65, 85, 0.5)',
-            borderRadius: '14px',
-            padding: '14px',
-            marginBottom: '10px',
-            display: 'flex',
-            gap: '12px'
-          }}>
-            <div style={{
-              borderRight: '1px solid rgba(51, 65, 85, 0.5)',
-              paddingRight: '12px',
-              textAlign: 'center',
-              minWidth: '65px'
-            }}>
-              <span style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#38bdf8' }}>
-                {lesson.time?.split(' - ')[0] || '09:00'}
-              </span>
-              <span style={{ display: 'block', fontSize: '10px', color: '#64748b' }}>
-                {lesson.time?.split(' - ')[1] || '10:20'}
-              </span>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
-                {lesson.subject}
-              </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
-                <span>📍 Room {lesson.room}</span>
-                <span>👨‍🏫 {lesson.teacher}</span>
-              </div>
-            </div>
-          </div>
-        ))
       ) : (
-        <div style={{
-          background: 'rgba(15, 23, 42, 0.4)',
-          border: '1px solid rgba(51, 65, 85, 0.3)',
-          borderRadius: '14px',
-          padding: '24px',
-          textAlign: 'center',
-          color: '#94a3b8',
-          fontSize: '13px'
-        }}>
-          No classes scheduled for this day.
-        </div>
+        <GlassCard className="text-center py-10 text-xs text-[var(--text-secondary)]">
+          No classes or events scheduled for {selectedDay}.
+        </GlassCard>
       )}
+
+      {/* Personal Event Modal */}
+      <PersonalEventModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onAddEvent={handleAddEvent}
+      />
     </div>
   );
 }
