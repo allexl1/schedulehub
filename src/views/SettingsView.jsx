@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import GlassCard from '../components/common/GlassCard';
 
-export default function SettingsView({ group, setGroup }) {
+export default function SettingsView({ group, setGroup, themeMode = 'system', setThemeMode }) {
   const [inputVal, setInputVal] = useState(group || '150501');
   const [savedMsg, setSavedMsg] = useState(false);
 
@@ -13,82 +14,79 @@ export default function SettingsView({ group, setGroup }) {
     setTimeout(() => setSavedMsg(false), 2000);
   };
 
-  return (
-    <div>
-      <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>Settings</h2>
+  const themes = [
+    { id: 'system', label: 'System' },
+    { id: 'light', label: 'Light' },
+    { id: 'dark', label: 'Dark' },
+  ];
 
-      <div style={{
-        background: 'rgba(15, 23, 42, 0.6)',
-        border: '1px solid rgba(51, 65, 85, 0.5)',
-        borderRadius: '16px',
-        padding: '16px',
-        marginBottom: '16px'
-      }}>
-        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginBottom: '8px' }}>
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">Settings</h2>
+
+      {/* Appearance / Theme Selector */}
+      <GlassCard>
+        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2.5">
+          Appearance Mode
+        </label>
+        <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/10 dark:bg-white/5 rounded-xl border border-[var(--border-glass)]">
+          {themes.map((t) => {
+            const isActive = themeMode === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setThemeMode && setThemeMode(t.id)}
+                className={`py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                  isActive
+                    ? 'bg-[#2997ff] text-white shadow-md'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </GlassCard>
+
+      {/* Student Group Input */}
+      <GlassCard>
+        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2">
           BSUIR Student Group Number
         </label>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '8px' }}>
+        <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             type="text"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
             placeholder="150501"
-            style={{
-              flex: 1,
-              background: 'rgba(30, 41, 59, 0.8)',
-              border: '1px solid rgba(51, 65, 85, 0.8)',
-              borderRadius: '10px',
-              padding: '10px 12px',
-              color: '#ffffff',
-              fontSize: '14px',
-              fontWeight: 600,
-              outline: 'none'
-            }}
+            className="flex-1 bg-black/10 dark:bg-white/5 border border-[var(--border-glass)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none focus:border-[#2997ff]"
           />
           <button
             type="submit"
-            style={{
-              background: '#2563eb',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '10px',
-              padding: '10px 16px',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
+            className="bg-[#2997ff] text-white font-semibold text-xs px-4 py-2 rounded-xl active:scale-95 transition-transform"
           >
             Save
           </button>
         </form>
         {savedMsg && (
-          <div style={{ fontSize: '11px', color: '#10b981', marginTop: '8px', fontWeight: 600 }}>
+          <p className="text-[11px] text-[#30d158] mt-2 font-semibold">
             ✓ Group updated successfully!
-          </div>
+          </p>
         )}
-      </div>
+      </GlassCard>
 
-      <div style={{
-        background: 'rgba(15, 23, 42, 0.6)',
-        border: '1px solid rgba(51, 65, 85, 0.5)',
-        borderRadius: '16px',
-        padding: '16px'
-      }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', margin: 0 }}>Class Reminders</h3>
-        <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 12px 0' }}>
-          Automated Telegram alerts are sent 15 minutes before your scheduled lectures and labs.
+      {/* Reminders Info */}
+      <GlassCard>
+        <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">Class Reminders</h3>
+        <p className="text-xs text-[var(--text-secondary)] mb-3">
+          Automated Telegram alerts are sent 15 minutes before scheduled lectures and labs.
         </p>
-        <div style={{
-          fontSize: '11px',
-          color: '#38bdf8',
-          background: 'rgba(56, 189, 248, 0.1)',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          border: '1px solid rgba(56, 189, 248, 0.2)'
-        }}>
+        <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#2997ff] bg-[#2997ff]/10 px-3 py-1.5 rounded-lg border border-[#2997ff]/20">
           Status: Active via Telegram Bot
         </div>
-      </div>
+      </GlassCard>
     </div>
   );
 }
