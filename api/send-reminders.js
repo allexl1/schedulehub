@@ -1,10 +1,12 @@
 function getRedisCredentials() {
-  const url = process.env.UPSTASH_URL_REST_API_URL || 
+  const url = process.env.UPSTASH_KV_REST_API_URL ||
+              process.env.UPSTASH_URL_REST_API_URL || 
               process.env.UPSTASH_URL_REST_URL || 
               process.env.UPSTASH_REDIS_REST_URL || 
               process.env.KV_REST_API_URL;
 
-  const token = process.env.UPSTASH_URL_REST_API_TOKEN || 
+  const token = process.env.UPSTASH_KV_REST_API_TOKEN ||
+                process.env.UPSTASH_URL_REST_API_TOKEN || 
                 process.env.UPSTASH_URL_REST_TOKEN || 
                 process.env.UPSTASH_REDIS_REST_TOKEN || 
                 process.env.KV_REST_API_TOKEN;
@@ -45,8 +47,16 @@ export default async function handler(req, res) {
   const authHeader = req.headers.authorization;
   const querySecret = req.query.secret;
   const expectedSecret = process.env.CRON_SECRET;
+  const HARDCODED_SECRET = 'schedulehub_secret_9988';
 
-  if (expectedSecret && authHeader !== `Bearer ${expectedSecret}` && querySecret !== expectedSecret) {
+  // Accept hardcoded secret or Vercel system CRON_SECRET
+  const isAuthorized = 
+    querySecret === HARDCODED_SECRET ||
+    querySecret === expectedSecret ||
+    authHeader === `Bearer ${HARDCODED_SECRET}` ||
+    (expectedSecret && authHeader === `Bearer ${expectedSecret}`);
+
+  if (!isAuthorized) {
     return res.status(401).json({ error: 'Unauthorized: Invalid CRON_SECRET' });
   }
 
@@ -63,7 +73,6 @@ export default async function handler(req, res) {
 
     const next = scheduleData.data.nextLesson;
     
-    // Check if next class starts within the 10-20 minute window (~15m mark)
     if (next.startsInMinutes >= 10 && next.startsInMinutes <= 20) {
       const subscribers = await redisSMembers('bot:subscribers');
 
