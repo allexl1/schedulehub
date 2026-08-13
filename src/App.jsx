@@ -8,6 +8,7 @@ import SettingsView from './views/SettingsView';
 import OnboardingView from './views/OnboardingView';
 import { useTelegram } from './hooks/useTelegram';
 import { useOffline } from './hooks/useOffline';
+import { LanguageProvider } from './context/LanguageContext';
 
 const FALLBACK_DATA = {
   student: { name: "Alex", group: "150501", subgroup: 1, currentWeek: 2 },
@@ -31,7 +32,7 @@ const FALLBACK_DATA = {
   ]
 };
 
-export default function App() {
+function AppContent() {
   const { user, colorScheme, triggerHaptic } = useTelegram();
   const isOffline = useOffline();
 
@@ -127,12 +128,20 @@ export default function App() {
 
   // Render Guided Onboarding Flow for First-Time Users
   if (!isOnboarded) {
-    return (
-      <div className="max-w-[440px] mx-auto px-4">
-        <OnboardingView onComplete={handleOnboardingComplete} />
-      </div>
-    );
-  }
+      return (
+    <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
+      ...
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
+  );
+}
 
   // Safe Property Extraction with Fallbacks
   const student = scheduleData?.student || FALLBACK_DATA.student;
