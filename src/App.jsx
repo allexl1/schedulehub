@@ -188,6 +188,7 @@ export default function App() {
           <ScheduleView
             todaySchedule={todaySchedule}
             loading={loading}
+            isUsingCache={Boolean(apiError || isOffline)}
           />
         )}
 
