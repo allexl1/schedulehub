@@ -1,12 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { isValidTimeSlot } from '../../utils/time';
 
-export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
+export default function PersonalEventModal({
+  isOpen,
+  onClose,
+  onSaveEvent,
+  onAddEvent,
+  initialEvent = null
+}) {
   const [title, setTitle] = useState('');
   const [type, setType] = useState('Study');
   const [time, setTime] = useState('16:00 - 17:30');
   const [day, setDay] = useState('Mon');
   const [timeError, setTimeError] = useState('');
+
+  const isEditing = Boolean(initialEvent);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialEvent) {
+        setTitle(initialEvent.subject || '');
+        setType(initialEvent.type || 'Study');
+        setTime(initialEvent.time || '16:00 - 17:30');
+        setDay(initialEvent.day || 'Mon');
+      } else {
+        setTitle('');
+        setType('Study');
+        setTime('16:00 - 17:30');
+        setDay('Mon');
+      }
+      setTimeError('');
+    }
+  }, [isOpen, initialEvent]);
 
   if (!isOpen) return null;
 
@@ -20,8 +45,8 @@ export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
     }
 
     setTimeError('');
-    onAddEvent({
-      id: Date.now(),
+    const eventPayload = {
+      id: initialEvent ? initialEvent.id : Date.now(),
       subject: title.trim(),
       type: type,
       time: time,
@@ -29,9 +54,13 @@ export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
       teacher: type,
       isPersonal: true,
       day: day
-    });
+    };
 
-    setTitle('');
+    const handleSave = onSaveEvent || onAddEvent;
+    if (handleSave) {
+      handleSave(eventPayload);
+    }
+
     onClose();
   };
 
@@ -39,7 +68,9 @@ export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
       <div className="w-full max-w-sm bg-[var(--surface-glass)] rounded-2xl p-5 border border-[var(--border-glass)] shadow-xl">
         <div className="flex justify-between items-center pb-3 mb-4 border-b border-[var(--border-glass)]">
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">Add Personal Event</h3>
+          <h3 className="text-sm font-bold text-[var(--text-primary)]">
+            {isEditing ? 'Edit Personal Event' : 'Add Personal Event'}
+          </h3>
           <button
             onClick={() => {
               setTimeError('');
@@ -134,7 +165,7 @@ export default function PersonalEventModal({ isOpen, onClose, onAddEvent }) {
               type="submit"
               className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-[#2997ff] text-white"
             >
-              Save Event
+              {isEditing ? 'Save Changes' : 'Save Event'}
             </button>
           </div>
         </form>
