@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import GlassCard from '../components/common/GlassCard';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function SettingsView({ group, setGroup, themeMode = 'system', setThemeMode }) {
   const [inputVal, setInputVal] = useState(group || '150501');
   const [savedMsg, setSavedMsg] = useState(false);
 
+const { language, setLanguage, t } = useLanguage();
+  
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!inputVal.trim()) return;
@@ -24,6 +27,38 @@ export default function SettingsView({ group, setGroup, themeMode = 'system', se
     <div className="space-y-4">
       <h2 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">Settings</h2>
 
+<GlassCard>
+  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2.5">
+    {t('settings.language')}
+  </label>
+
+  <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/10 dark:bg-white/5 rounded-xl border border-[var(--border-glass)]">
+    <button
+      type="button"
+      onClick={() => setLanguage('ru')}
+      className={`py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+        language === 'ru'
+          ? 'bg-[#2997ff] text-white shadow-md'
+          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+      }`}
+    >
+      Русский
+    </button>
+
+    <button
+      type="button"
+      onClick={() => setLanguage('en')}
+      className={`py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+        language === 'en'
+          ? 'bg-[#2997ff] text-white shadow-md'
+          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+      }`}
+    >
+      English
+    </button>
+  </div>
+</GlassCard>
+      
       {/* Appearance / Theme Selector */}
       <GlassCard>
         <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2.5">
