@@ -128,9 +128,9 @@ function AppContent() {
 
   // Render Guided Onboarding Flow for First-Time Users
   if (!isOnboarded) {
-      return (
-    <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
-      ...
+  return (
+    <div className="max-w-[440px] mx-auto px-4">
+      <OnboardingView onComplete={handleOnboardingComplete} />
     </div>
   );
 }
