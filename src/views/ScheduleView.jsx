@@ -28,6 +28,8 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
     todayDayName === 'Sun' ? 'Mon' : todayDayName
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+
   const [personalEvents, setPersonalEvents] = useState(() => {
     try {
       const saved = localStorage.getItem('sh_personal_events');
@@ -37,14 +39,37 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
     }
   });
 
-  const handleAddEvent = (newEvent) => {
-    const updated = [...personalEvents, newEvent];
+  const handleOpenCreateModal = () => {
+    setEditingEvent(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (event) => {
+    setEditingEvent(event);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingEvent(null);
+  };
+
+  const handleSaveEvent = (savedEvent) => {
+    const exists = personalEvents.some((ev) => ev.id === savedEvent.id);
+    let updated;
+
+    if (exists) {
+      updated = personalEvents.map((ev) => (ev.id === savedEvent.id ? savedEvent : ev));
+    } else {
+      updated = [...personalEvents, savedEvent];
+    }
+
     setPersonalEvents(updated);
 
     try {
       localStorage.setItem('sh_personal_events', JSON.stringify(updated));
     } catch (e) {
-      console.error('Failed to save personal event:', e);
+      console.error('Failed to persist personal events:', e);
     }
   };
 
@@ -100,7 +125,7 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenCreateModal}
           className="text-xs font-bold text-[#2997ff] bg-[#2997ff]/10 px-3 py-1.5 rounded-xl transition-all active:scale-95"
         >
           + Add Event
@@ -241,33 +266,56 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
                   )}
                 </div>
 
-                {/* Type Tag & Optional Personal Event Delete Action */}
-                <div className="text-right shrink-0 flex items-center gap-2">
+                {/* Type Tag & Personal Event Actions */}
+                <div className="text-right shrink-0 flex items-center gap-1.5">
                   <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     {item.type || 'Lecture'}
                   </span>
                   {item.isPersonal && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteEvent(item.id)}
-                      className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#ff3b30] hover:bg-white/10 transition-colors"
-                      title="Delete event"
-                      aria-label="Delete personal event"
-                    >
-                      <svg
-                        className="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                    <div className="flex items-center gap-1 ml-1">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditModal(item)}
+                        className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#2997ff] hover:bg-white/10 transition-colors"
+                        title="Edit event"
+                        aria-label="Edit personal event"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
+                        <svg
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEvent(item.id)}
+                        className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#ff3b30] hover:bg-white/10 transition-colors"
+                        title="Delete event"
+                        aria-label="Delete personal event"
+                      >
+                        <svg
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -283,8 +331,9 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
       {/* Personal Event Modal */}
       <PersonalEventModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onAddEvent={handleAddEvent}
+        onClose={handleCloseModal}
+        onSaveEvent={handleSaveEvent}
+        initialEvent={editingEvent}
       />
     </div>
   );
