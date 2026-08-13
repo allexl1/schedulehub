@@ -135,13 +135,7 @@ function AppContent() {
   );
 }
 
-export default function App() {
-  return (
-    <LanguageProvider>
-      <AppContent />
-    </LanguageProvider>
-  );
-}
+
 
   // Safe Property Extraction with Fallbacks
   const student = scheduleData?.student || FALLBACK_DATA.student;
