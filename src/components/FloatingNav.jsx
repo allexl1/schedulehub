@@ -5,11 +5,11 @@ import { useLanguage } from '../context/LanguageContext';
 export default function FloatingNav({ activeTab, setActiveTab }) {
   const { t } = useLanguage();
   const navItems = [
-    { id: 'home', label: t('nav.home'), icon: '🏠' },
-{ id: 'schedule', label: t('nav.schedule'), icon: '📅' },
-{ id: 'teachers', label: t('nav.teachers'), icon: '👨‍🏫' },
-{ id: 'exams', label: t('nav.exams'), icon: '📝' },
-{ id: 'settings', label: t('nav.settings'), icon: '⚙️' }
+    { id: 'home', label: t('nav.home'), icon: 'home' },
+{ id: 'schedule', label: t('nav.schedule'), icon: 'schedule' },
+{ id: 'teachers', label: t('nav.teachers'), icon: 'teachers' },
+{ id: 'exams', label: t('nav.exams'), icon: 'exams' },
+{ id: 'settings', label: t('nav.settings'), icon: 'settings' }
   ];
 
   return (
