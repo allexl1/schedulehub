@@ -1,13 +1,15 @@
 import React from 'react';
 import Icon from './common/Icon';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function FloatingNav({ activeTab, setActiveTab }) {
+  const { t } = useLanguage();
   const navItems = [
-    { id: 'home', label: 'Home', icon: 'home' },
-    { id: 'schedule', label: 'Schedule', icon: 'schedule' },
-    { id: 'teachers', label: 'Teachers', icon: 'teachers' },
-    { id: 'exams', label: 'Exams', icon: 'exams' },
-    { id: 'settings', label: 'Settings', icon: 'settings' },
+    { id: 'home', label: t('nav.home'), icon: '🏠' },
+{ id: 'schedule', label: t('nav.schedule'), icon: '📅' },
+{ id: 'teachers', label: t('nav.teachers'), icon: '👨‍🏫' },
+{ id: 'exams', label: t('nav.exams'), icon: '📝' },
+{ id: 'settings', label: t('nav.settings'), icon: '⚙️' }
   ];
 
   return (
