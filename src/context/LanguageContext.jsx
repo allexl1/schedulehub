@@ -22,20 +22,18 @@ export function LanguageProvider({ children }) {
 
   const dictionary = translations[language] || translations.ru;
 
-const t = (key) => dictionary[key] || key;
-
-// expose both
-<LanguageContext.Provider
-  value={{
-    language,
-    setLanguage,
-    t,
-    dictionary
-  }}
->
+  // Backward-compatible translator function
+  const t = (key) => dictionary[key] || key;
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider
+      value={{
+        language,
+        setLanguage,
+        t,
+        dictionary
+      }}
+    >
       {children}
     </LanguageContext.Provider>
   );
@@ -43,8 +41,10 @@ const t = (key) => dictionary[key] || key;
 
 export function useLanguage() {
   const context = useContext(LanguageContext);
+
   if (!context) {
     throw new Error('useLanguage must be used within a LanguageProvider');
   }
+
   return context;
 }
