@@ -22,8 +22,11 @@ export function LanguageProvider({ children }) {
 
   const dictionary = translations[language] || translations.ru;
 
-  // Backward-compatible translator function
-  const t = (key) => dictionary[key] || key;
+const t = (key) => {
+  return key
+    .split('.')
+    .reduce((obj, part) => obj?.[part], dictionary) || key;
+};
 
   return (
     <LanguageContext.Provider
