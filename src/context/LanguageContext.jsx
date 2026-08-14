@@ -16,17 +16,19 @@ export function LanguageProvider({ children }) {
     try {
       localStorage.setItem('sh_language', language);
     } catch {
-      // Ignore localStorage write failures
+      // ignore
     }
   }, [language]);
 
   const dictionary = translations[language] || translations.ru;
 
-const t = (key) => {
-  return key
-    .split('.')
-    .reduce((obj, part) => obj?.[part], dictionary) || key;
-};
+  const t = (key) => {
+    const value = key
+      .split('.')
+      .reduce((obj, part) => obj?.[part], dictionary);
+
+    return value ?? key;
+  };
 
   return (
     <LanguageContext.Provider
