@@ -183,6 +183,17 @@ const titleClass =
     ? 'text-2xl'
     : 'text-[32px]';
 
+if (selectedLesson) {
+  return (
+    <div className="max-w-[440px] mx-auto px-4 pt-5 pb-10">
+      <SubjectDetailsView
+        lesson={selectedLesson}
+        onBack={() => setSelectedLesson(null)}
+      />
+    </div>
+  );
+}
+  
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 {/* App Header */}
@@ -211,17 +222,7 @@ const titleClass =
         </div>
       )}
 
-if (selectedLesson) {
-  return (
-    <div className="max-w-[440px] mx-auto px-4 pt-5 pb-10">
-      <SubjectDetailsView
-        lesson={selectedLesson}
-        onBack={() => setSelectedLesson(null)}
-      />
-    </div>
-  );
-}
-      
+ 
 <main>
   {activeTab === 'home' && (
     <HomeView
