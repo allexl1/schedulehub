@@ -116,11 +116,26 @@ export default function HomeView({
                   item.id === lifecycle.upcomingLesson.id
                 );
 
-              const borderIndicatorClass = isCurrent
-                ? 'border-[#30d158]'
-                : isNext
-                ? 'border-[#2997ff]'
-                : 'border-transparent';
+              const borderIndicatorColor = isCurrent
+  ? '#30d158'
+  : isNext
+  ? '#2997ff'
+  : lessonColor;
+
+const lessonType = item.type || '';
+
+const lessonColor =
+  lessonType === 'Lecture'
+    ? '#2997ff'
+    : lessonType === 'Lab'
+    ? '#30d158'
+    : lessonType === 'Practice'
+    ? '#ff9f0a'
+    : lessonType === 'Exam'
+    ? '#ff453a'
+    : item.isPersonal
+    ? '#bf5af2'
+    : '#8e8e93';
 
               const roomText = formatRoomString(
                 item.room,
@@ -137,10 +152,13 @@ export default function HomeView({
                 .join(' · ');
 
               return (
-                <div
-                  key={item.id || idx}
-                  className={`py-3 pl-2.5 border-l-2 ${borderIndicatorClass} flex items-start gap-3.5 transition-colors`}
-                >
+               <div
+  key={item.id || idx}
+  className="py-3 pl-2.5 border-l-2 flex items-start gap-3.5 transition-colors"
+  style={{
+    borderLeftColor: borderIndicatorColor
+  }}
+>
 
                   <div
                     className={`w-11 shrink-0 text-xs font-mono pt-0.5 flex items-center gap-1.5 ${
@@ -162,17 +180,23 @@ export default function HomeView({
                     </span>
                   </div>
 
-                  <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="min-w-0 flex-1 space-y-0.5">
+  <div className="flex items-center gap-2">
+    <span
+      className="w-2 h-2 rounded-full shrink-0"
+      style={{ backgroundColor: lessonColor }}
+    />
 
-                    <div
-                      className={`text-sm leading-snug line-clamp-2 ${
-                        isCurrent || isNext
-                          ? 'font-semibold text-[var(--text-primary)]'
-                          : 'font-normal text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {item.subject}
-                    </div>
+    <div
+      className={`text-sm leading-snug line-clamp-2 ${
+        isCurrent || isNext
+          ? 'font-semibold text-[var(--text-primary)]'
+          : 'font-normal text-[var(--text-primary)]'
+      }`}
+    >
+      {item.subject}
+    </div>
+  </div>
 
                     <div className="text-xs text-[var(--text-secondary)] opacity-65 leading-snug break-words">
                       {item.isPersonal ? (
