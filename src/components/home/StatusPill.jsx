@@ -4,27 +4,24 @@ export default function StatusPill({ status = 'live', lastUpdated }) {
   const statusConfig = {
     live: {
       label: 'Live',
-      dotColor: 'bg-[#30d158]',
-      textColor: 'text-[#30d158]'
+      dotColor: 'bg-[#30d158]'
     },
     cached: {
       label: lastUpdated || 'Cached',
-      dotColor: 'bg-[#f59e0b]',
-      textColor: 'text-[#f59e0b]'
+      dotColor: 'bg-[#f59e0b]'
     },
     offline: {
       label: 'Offline',
-      dotColor: 'bg-[#ff453a]',
-      textColor: 'text-[#ff453a]'
+      dotColor: 'bg-[#ff453a]'
     }
   };
 
   const current = statusConfig[status] || statusConfig.live;
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium">
-      <span className={`w-1.5 h-1.5 rounded-full ${current.dotColor}`} />
-      <span className={current.textColor}>{current.label}</span>
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-80">
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${current.dotColor}`} />
+      <span>{current.label}</span>
     </span>
   );
 }
