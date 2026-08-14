@@ -37,6 +37,7 @@ function AppContent() {
   const isOffline = useOffline();
 
   const [activeTab, setActiveTab] = useState('home');
+  const [selectedLesson, setSelectedLesson] = useState(null);
   const [isOnboarded, setIsOnboarded] = useState(() => localStorage.getItem('sh_onboarded') === 'true');
   const [group, setGroup] = useState(() => localStorage.getItem('sh_group') || '150501');
   const [subgroup, setSubgroup] = useState(() => Number(localStorage.getItem('sh_subgroup')) || 1);
