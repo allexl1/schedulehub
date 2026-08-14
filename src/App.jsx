@@ -135,8 +135,6 @@ function AppContent() {
   );
 }
 
-
-
   // Safe Property Extraction with Fallbacks
   const student = scheduleData?.student || FALLBACK_DATA.student;
   const nextLesson = scheduleData?.nextLesson || FALLBACK_DATA.nextLesson;
@@ -162,27 +160,26 @@ if (hour >= 6 && hour < 12) {
   const statusState = isOffline ? 'offline' : apiError ? 'cached' : 'live';
 const weekNumber = student?.currentWeek || 1;
 
+const greetingText = `${greeting}, ${displayName}`;
+
+const titleClass =
+  greetingText.length > 35
+    ? 'text-2xl'
+    : greetingText.length > 25
+    ? 'text-3xl'
+    : 'text-[32px]';
+
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 {/* App Header */}
-<header className="mb-5">
+<header className="mb-6">
   <h1
-    className={`
-      font-bold tracking-tight text-[var(--text-primary)]
-      leading-tight
-      ${
-        displayName.length > 18
-          ? 'text-3xl'
-          : displayName.length > 12
-          ? 'text-4xl'
-          : 'text-5xl'
-      }
-    `}
+    className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)]`}
   >
     {greeting}, {displayName} {greetingEmoji}
   </h1>
 
-  <p className="mt-2 text-sm text-[var(--text-secondary)] font-medium">
+  <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
     Группа {group} • Подгруппа {subgroup}
   </p>
 </header>
