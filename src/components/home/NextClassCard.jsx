@@ -1,77 +1,85 @@
 import React from 'react';
-import { calculateMinutesUntil } from '../../utils/time';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatRoomString } from '../../utils/time';
 
-export default function NextClassCard({ nextLesson }) {
-  const { language } = useLanguage();
-  const isRu = language === 'ru';
+export default function NextClassCard({
+  nextLesson,
+  lessonState = 'upcoming',
+  endTime = null,
+  minutesUntil = null
+}) {
+  const { t } = useLanguage();
 
-  if (!nextLesson) {
+  // 1. Finished Lifecycle State: Text-only, clean, calm
+  if (!nextLesson || lessonState === 'finished') {
     return (
-      <div className="rounded-3xl bg-[var(--surface-glass)] border border-[var(--border-glass)] p-6 text-center space-y-1.5 shadow-sm">
+      <div className="rounded-2xl bg-[var(--surface-glass)] border border-[var(--border-glass)] p-5 text-center space-y-1 shadow-sm">
         <h3 className="text-sm font-bold text-[var(--text-primary)]">
-          {isRu ? 'На сегодня всё' : 'All Clear Today'}
+          {t.noMoreClassesToday}
         </h3>
-        <p className="text-xs text-[var(--text-secondary)] opacity-80 max-w-[220px] mx-auto">
-          {isRu
-            ? 'Все занятия и события на сегодня завершены.'
-            : 'No remaining classes or events on your schedule.'}
+        <p className="text-xs text-[var(--text-secondary)] opacity-70">
+          {t.allActivitiesFinished}
         </p>
       </div>
     );
   }
 
-  const minutesUntil = nextLesson.startsInMinutes ?? calculateMinutesUntil(nextLesson.time);
   const isPersonal = Boolean(nextLesson.isPersonal);
   const timeSlot = nextLesson.time || '09:00 - 10:20';
-  const roomText = nextLesson.room ? (isRu ? 'Ауд. ' + nextLesson.room : 'Room ' + nextLesson.room) : '';
+  const roomText = formatRoomString(nextLesson.room, t.room);
   const teacherText = nextLesson.teacher || '';
 
-  const now = new Date();
-  const localeCode = isRu ? 'ru-RU' : 'en-US';
-  const formattedDate = now.toLocaleDateString(localeCode, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short'
-  }).toUpperCase();
+  // 2. Lifecycle Urgency Copy Resolution
+  let urgencyText = '';
+  let urgencyColor = 'text-[var(--text-secondary)]';
 
-  // Compress metadata into a single line
-  let metaLine = timeSlot;
+  if (lessonState === 'current') {
+    urgencyText = endTime
+      ? `● ${t.inProgress} · ${t.until} ${endTime}`
+      : `● ${t.inProgress}`;
+    urgencyColor = 'text-[#30d158]';
+  } else if (lessonState === 'upcoming') {
+    urgencyColor = 'text-[#2997ff]';
+    if (minutesUntil !== null && minutesUntil !== undefined) {
+      urgencyText = `${t.startsIn} ${minutesUntil} ${t.min}`;
+    } else {
+      urgencyText = t.soon;
+    }
+  }
+
+  // 3. Metadata Line Construction
+  let metaLine = '';
   if (isPersonal) {
-    metaLine += ' · ' + (isRu ? 'Личное событие' : 'Personal Activity');
+    metaLine = t.personalActivity;
   } else {
-    if (roomText) metaLine += ' · ' + roomText;
-    if (teacherText) metaLine += ' · ' + teacherText;
+    metaLine = [roomText, teacherText].filter(Boolean).join(' · ');
   }
 
   return (
-    <div className="rounded-3xl bg-[var(--surface-glass)] border border-[var(--border-glass)] p-6 shadow-sm space-y-3.5">
-      {/* Level 4: Date Context */}
-      <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)] opacity-50">
-        {formattedDate}
-      </div>
-
-      {/* Level 1: Primary Visual Focus (Countdown) */}
-      <div className="flex items-baseline gap-2">
-        <span className="text-5xl font-black tracking-tighter text-[#2997ff] font-mono leading-none">
-          {minutesUntil !== null ? `${minutesUntil}m` : '--'}
+    <div className="rounded-2xl bg-[var(--surface-glass)] border border-[var(--border-glass)] p-5 shadow-sm space-y-2">
+      {/* Urgency Status & Time Range */}
+      <div className="flex items-center justify-between text-xs">
+        <span className={`font-semibold tracking-tight ${urgencyColor}`}>
+          {urgencyText}
         </span>
-        <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-          {isRu ? 'до начала' : 'until start'}
+        <span className="font-mono font-medium text-[var(--text-secondary)] opacity-70">
+          {timeSlot}
         </span>
       </div>
 
-      {/* Level 2: Secondary Visual Focus (Subject Title) */}
+      {/* Primary Visual Anchor: Subject Title */}
       <div>
-        <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] leading-snug">
+        <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] leading-snug line-clamp-2">
           {nextLesson.subject}
         </h2>
       </div>
 
-      {/* Level 3: Compressed Metadata */}
-      <div className="text-xs font-medium text-[var(--text-secondary)] truncate pt-3 border-t border-[var(--border-glass)]/40 opacity-80">
-        {metaLine}
-      </div>
+      {/* Tertiary Metadata Line */}
+      {metaLine && (
+        <div className="text-xs text-[var(--text-secondary)] opacity-70 leading-snug break-words pt-0.5">
+          {metaLine}
+        </div>
+      )}
     </div>
   );
 }
