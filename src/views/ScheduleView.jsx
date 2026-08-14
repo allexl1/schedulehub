@@ -100,16 +100,31 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
   // Assign lesson statuses (Past, In Progress, Next, Upcoming)
   let foundNext = false;
   const processedSchedule = sortedSchedule.map((item) => {
-    const rawStatus = getClassStatus(item.time, isSelectedDayToday, now);
-    let finalStatus = rawStatus;
+const rawStatus = getClassStatus(item.time, now);
 
-    if (rawStatus === 'upcoming' && !foundNext && isSelectedDayToday) {
-      finalStatus = 'next';
-      foundNext = true;
-    }
+let finalStatus = rawStatus;
 
-    return { ...item, status: finalStatus };
-  });
+if (
+  rawStatus === 'upcoming' &&
+  !foundNext &&
+  isSelectedDayToday
+) {
+  finalStatus = 'next';
+  foundNext = true;
+}
+
+if (rawStatus === 'current') {
+  finalStatus = 'in_progress';
+}
+
+if (rawStatus === 'finished') {
+  finalStatus = 'past';
+}
+
+return {
+  ...item,
+  status: finalStatus
+};
 
   return (
     <div className="space-y-5">
@@ -193,9 +208,11 @@ export default function ScheduleView({ todaySchedule = [], loading = false }) {
             const minutesLeft = isInProgress ? getMinutesUntilEnd(item.time, now) : null;
             const timeParts = parseTimeRange(item.time);
 
-            const startTime = timeParts ? timeParts[0] : item.time?.split(' - ')[0] || '09:00';
-            const endTime = timeParts ? timeParts[1] : item.time?.split(' - ')[1] || '10:20';
+const startTime =
+  timeParts?.startTime || '09:00';
 
+const endTime =
+  timeParts?.endTime || '10:20';
             return (
               <div
                 key={item.id || idx}
