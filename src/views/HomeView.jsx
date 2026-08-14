@@ -68,7 +68,7 @@ export default function HomeView({
 
   const weekNumber = student?.currentWeek || 1;
 
-  const identityString = `${displayName} · ${groupNumber}${subgroupSuffix} (${weekLabel})`;
+
 
   return (
     <div className="pt-2 pb-6 space-y-6">
