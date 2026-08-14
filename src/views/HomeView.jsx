@@ -66,42 +66,39 @@ export default function HomeView({
     language
   );
 
-  const displayName =
-    student?.shortName ||
-    student?.firstName ||
-    student?.name ||
-    dictionary.student;
-
-  const groupNumber = student?.group || '373901';
-
-  const subgroupSuffix = student?.subgroup
-    ? `-${student.subgroup}`
-    : '';
-
   const weekNumber = student?.currentWeek || 1;
-
-  const weekLabel =
-    language === 'ru'
-      ? `${weekNumber} ${dictionary.weekShort}`
-      : `${dictionary.weekShort}${weekNumber}`;
 
   const identityString = `${displayName} · ${groupNumber}${subgroupSuffix} (${weekLabel})`;
 
   return (
     <div className="pt-2 pb-6 space-y-6">
 
-      <header className="flex justify-between items-center">
-        <div className="text-xs font-semibold text-[var(--text-primary)] tracking-tight truncate pr-2">
-          {identityString}
-        </div>
+      <header className="space-y-3">
 
-        <div className="shrink-0">
-          <StatusPill
-            status={status}
-            lastUpdated={formattedAge}
-          />
-        </div>
-      </header>
+  <div className="flex items-center justify-between">
+
+    <div>
+      <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-70">
+        Неделя обучения
+      </div>
+
+      <div className="text-2xl font-bold text-[var(--text-primary)]">
+        {weekNumber}
+      </div>
+    </div>
+
+    {status !== 'live' && (
+      <div className="shrink-0">
+        <StatusPill
+          status={status}
+          lastUpdated={formattedAge}
+        />
+      </div>
+    )}
+
+  </div>
+
+</header>
 
       <section>
         <NextClassCard
