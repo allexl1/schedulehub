@@ -73,33 +73,6 @@ export default function HomeView({
   return (
     <div className="pt-2 pb-6 space-y-6">
 
-      <header className="space-y-3">
-
-  <div className="flex items-center justify-between">
-
-    <div>
-      <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-70">
-        Неделя обучения
-      </div>
-
-      <div className="text-2xl font-bold text-[var(--text-primary)]">
-        {weekNumber}
-      </div>
-    </div>
-
-    {status !== 'live' && (
-      <div className="shrink-0">
-        <StatusPill
-          status={status}
-          lastUpdated={formattedAge}
-        />
-      </div>
-    )}
-
-  </div>
-
-</header>
-
       <section>
         <NextClassCard
           nextLesson={lifecycle.effectiveHeroLesson}
