@@ -20,10 +20,10 @@ export default function HomeView({
   const now = new Date();
   const localeCode = language === 'ru' ? 'ru-RU' : 'en-US';
 
-  const todayDayCode = now
-    .toLocaleDateString(localeCode, { weekday: 'short' })
-    .toUpperCase()
-    .replace('.', '');
+  const todayDayName = now.toLocaleDateString(
+  localeCode,
+  { weekday: 'long' }
+);
 
   const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const todayFilterCode = daysShort[now.getDay()];
@@ -89,9 +89,9 @@ export default function HomeView({
             {dictionary.todaySchedule} ({combinedTodaySchedule.length})
           </h2>
 
-          <span className="text-[10px] font-bold text-[var(--text-secondary)] font-mono opacity-50">
-            {todayDayCode}
-          </span>
+<span className="text-[11px] font-medium text-[var(--text-secondary)] opacity-60 capitalize">
+  {todayDayName}
+</span>
         </div>
 
         {combinedTodaySchedule.length === 0 ? (
