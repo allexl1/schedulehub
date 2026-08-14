@@ -175,9 +175,11 @@ if (hour >= 6 && hour < 12) {
 }
 
 const titleClass =
-  greetingText.length > 35
+  greetingText.length > 50
+    ? 'text-xl'
+    : greetingText.length > 40
     ? 'text-2xl'
-    : greetingText.length > 25
+    : greetingText.length > 30
     ? 'text-3xl'
     : 'text-[32px]';
 
@@ -185,15 +187,21 @@ const titleClass =
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 {/* App Header */}
 <header className="mb-6">
+ <div className="flex items-end gap-2 flex-wrap">
   <h1
-    className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)]`}
+    className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)] min-w-0`}
   >
-    {greeting}, {displayName} {greetingEmoji}
+    {greeting}, {displayName}
   </h1>
 
-  <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
-    Группа {group} • Подгруппа {subgroup}
-  </p>
+  <span className="text-3xl shrink-0">
+    {greetingEmoji}
+  </span>
+</div>
+
+<p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
+  Группа: {group} • Подгруппа: {subgroup} • Неделя: {weekNumber}
+</p>
 </header>
 
       {/* Outage / Offline Alert Banner */}
