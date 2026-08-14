@@ -16,27 +16,18 @@ export function LanguageProvider({ children }) {
     try {
       localStorage.setItem('sh_language', language);
     } catch {
-      // ignore
+      // ignore storage errors
     }
   }, [language]);
 
-  const dictionary = translations[language] || translations.ru;
-
-  const t = (key) => {
-    const value = key
-      .split('.')
-      .reduce((obj, part) => obj?.[part], dictionary);
-
-    return value ?? key;
-  };
+  const t = translations[language] || translations.ru;
 
   return (
     <LanguageContext.Provider
       value={{
         language,
         setLanguage,
-        t,
-        dictionary
+        t
       }}
     >
       {children}
