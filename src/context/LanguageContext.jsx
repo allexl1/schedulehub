@@ -1,12 +1,10 @@
-import React, { createContext, useContext, useState } from 'react';
-import { ru } from '../locales/ru';
-import { en } from '../locales/en';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { translations } from '../constants/translations';
 
-const locales = { ru, en };
 const LanguageContext = createContext();
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguageState] = useState(() => {
+  const [language, setLanguage] = useState(() => {
     try {
       return localStorage.getItem('sh_language') || 'ru';
     } catch {
@@ -14,41 +12,15 @@ export function LanguageProvider({ children }) {
     }
   });
 
-  const setLanguage = (lang) => {
-    if (locales[lang]) {
-      setLanguageState(lang);
-      try {
-        localStorage.setItem('sh_language', lang);
-      } catch (e) {
-        console.error('Failed to save language preference:', e);
-      }
+  useEffect(() => {
+    try {
+      localStorage.setItem('sh_language', language);
+    } catch {
+      // Ignore localStorage write failures
     }
-  };
+  }, [language]);
 
-  const t = (path) => {
-    const keys = path.split('.');
-    let current = locales[language] || locales.ru;
-
-    for (const key of keys) {
-      if (current && current[key] !== undefined) {
-        current = current[key];
-      } else {
-        // Fallback to Russian dictionary
-        let fallback = locales.ru;
-        for (const fk of keys) {
-          if (fallback && fallback[fk] !== undefined) {
-            fallback = fallback[fk];
-          } else {
-            return path;
-          }
-        }
-        current = fallback;
-        break;
-      }
-    }
-
-    return typeof current === 'string' ? current : path;
-  };
+  const t = translations[language] || translations.ru;
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t }}>
