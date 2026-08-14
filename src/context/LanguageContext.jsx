@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect
-} from 'react';
-
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { translations } from '../constants/translations';
 
 const LanguageContext = createContext(null);
@@ -21,17 +15,30 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     try {
       localStorage.setItem('sh_language', language);
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
   }, [language]);
 
-  const t = translations[language] || translations.ru;
+  const dictionary = translations[language] || translations.ru;
+
+  const t = (key) => {
+    if (!key) return '';
+
+    return (
+      key
+        .split('.')
+        .reduce((obj, part) => obj?.[part], dictionary) || key
+    );
+  };
 
   return (
     <LanguageContext.Provider
       value={{
         language,
         setLanguage,
-        t
+        t,
+        dictionary
       }}
     >
       {children}
