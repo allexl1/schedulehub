@@ -32,16 +32,13 @@ export function parseTimeRange(timeStr) {
   const toMinutes = (value) => {
     if (!value) return null;
 
-    const [hours, minutes] = value.split(':').map(Number);
+    const [h, m] = value.split(':').map(Number);
 
-    if (
-      Number.isNaN(hours) ||
-      Number.isNaN(minutes)
-    ) {
+    if (Number.isNaN(h) || Number.isNaN(m)) {
       return null;
     }
 
-    return hours * 60 + minutes;
+    return h * 60 + m;
   };
 
   const startMinutes = toMinutes(startTime);
@@ -61,40 +58,94 @@ export function parseTimeRange(timeStr) {
   };
 }
 
+/**
+ * Legacy helper
+ */
 export function parseStartTimeInMinutes(timeStr) {
   return parseTimeRange(timeStr).startMinutes ?? 0;
 }
 
+/**
+ * Minutes until lesson starts
+ */
 export function calculateMinutesUntil(timeStr, now = new Date()) {
   const { startMinutes } = parseTimeRange(timeStr);
 
-  if (startMinutes === null) {
-    return null;
-  }
+  if (startMinutes === null) return null;
 
   const currentMinutes =
-    now.getHours() * 60 + now.getMinutes();
+    now.getHours() * 60 +
+    now.getMinutes();
 
   return startMinutes - currentMinutes;
 }
 
 /**
- * Used by PersonalEventModal.jsx
+ * Legacy helper used by ScheduleView
  */
-export function isValidTimeSlot(timeStr) {
-  const parsed = parseTimeRange(timeStr);
+export function getMinutesUntilEnd(timeStr, now = new Date()) {
+  const { endMinutes } = parseTimeRange(timeStr);
 
-  return (
-    parsed.startMinutes !== null &&
-    parsed.endMinutes !== null &&
-    parsed.endMinutes > parsed.startMinutes
-  );
+  if (endMinutes === null) return null;
+
+  const currentMinutes =
+    now.getHours() * 60 +
+    now.getMinutes();
+
+  return endMinutes - currentMinutes;
 }
 
 /**
- * Prevent:
- * "Room Room 302"
- * "Ауд. Ауд. 302"
+ * Legacy helper used by ScheduleView
+ *
+ * Returns:
+ * 'upcoming'
+ * 'current'
+ * 'finished'
+ */
+export function getClassStatus(timeStr, now = new Date()) {
+  const {
+    startMinutes,
+    endMinutes
+  } = parseTimeRange(timeStr);
+
+  if (startMinutes === null) {
+    return 'upcoming';
+  }
+
+  const currentMinutes =
+    now.getHours() * 60 +
+    now.getMinutes();
+
+  if (
+    currentMinutes >= startMinutes &&
+    (endMinutes === null ||
+      currentMinutes < endMinutes)
+  ) {
+    return 'current';
+  }
+
+  if (currentMinutes < startMinutes) {
+    return 'upcoming';
+  }
+
+  return 'finished';
+}
+
+/**
+ * Used by PersonalEventModal
+ */
+export function isValidTimeSlot(timeStr) {
+  const { startMinutes } =
+    parseTimeRange(timeStr);
+
+  return startMinutes !== null;
+}
+
+/**
+ * Prevents:
+ * Room Room 302
+ * Ауд. Ауд. 302
  */
 export function formatRoomString(room, prefix = '') {
   if (!room || typeof room !== 'string') {
@@ -103,22 +154,22 @@ export function formatRoomString(room, prefix = '') {
 
   const trimmed = room.trim();
 
-  if (!prefix) {
+  if (
+    prefix &&
+    trimmed
+      .toLowerCase()
+      .startsWith(prefix.toLowerCase())
+  ) {
     return trimmed;
   }
 
-  const normalizedRoom = trimmed.toLowerCase();
-  const normalizedPrefix = prefix.toLowerCase();
-
-  if (normalizedRoom.startsWith(normalizedPrefix)) {
-    return trimmed;
-  }
-
-  return `${prefix} ${trimmed}`;
+  return prefix
+    ? `${prefix} ${trimmed}`
+    : trimmed;
 }
 
 /**
- * Schedule lifecycle resolver
+ * Main lifecycle engine
  */
 export function evaluateScheduleLifecycle(
   scheduleList = [],
@@ -126,44 +177,37 @@ export function evaluateScheduleLifecycle(
   now = new Date()
 ) {
   const currentMinutes =
-    now.getHours() * 60 + now.getMinutes();
+    now.getHours() * 60 +
+    now.getMinutes();
 
   let currentLesson = null;
   let upcomingLesson = null;
 
   for (const item of scheduleList) {
-    if (!item) continue;
-
     const {
       startMinutes,
       endMinutes
-    } = parseTimeRange(item.time);
+    } = parseTimeRange(item?.time);
 
     if (startMinutes === null) continue;
 
-    const isCurrent =
+    if (
       currentMinutes >= startMinutes &&
       (endMinutes === null ||
-        currentMinutes < endMinutes);
-
-    const isUpcoming =
-      startMinutes > currentMinutes;
-
-    if (isCurrent && !currentLesson) {
-      currentLesson = item;
-    }
-
-    if (
-      isUpcoming &&
-      !upcomingLesson
+        currentMinutes < endMinutes)
     ) {
-      upcomingLesson = item;
+      if (!currentLesson) {
+        currentLesson = item;
+      }
+    } else if (
+      startMinutes > currentMinutes
+    ) {
+      if (!upcomingLesson) {
+        upcomingLesson = item;
+      }
     }
   }
 
-  /**
-   * Standalone nextLesson fallback
-   */
   if (
     !currentLesson &&
     !upcomingLesson &&
@@ -172,20 +216,20 @@ export function evaluateScheduleLifecycle(
     const {
       startMinutes,
       endMinutes
-    } = parseTimeRange(fallbackItem.time);
+    } = parseTimeRange(
+      fallbackItem.time
+    );
 
     if (startMinutes !== null) {
-      const isCurrent =
+      if (
         currentMinutes >= startMinutes &&
         (endMinutes === null ||
-          currentMinutes < endMinutes);
-
-      const isUpcoming =
-        startMinutes > currentMinutes;
-
-      if (isCurrent) {
+          currentMinutes < endMinutes)
+      ) {
         currentLesson = fallbackItem;
-      } else if (isUpcoming) {
+      } else if (
+        startMinutes > currentMinutes
+      ) {
         upcomingLesson = fallbackItem;
       }
     } else {
@@ -200,21 +244,23 @@ export function evaluateScheduleLifecycle(
 
   if (currentLesson) {
     heroState = 'current';
-    effectiveHeroLesson = currentLesson;
+    effectiveHeroLesson =
+      currentLesson;
 
-    const { endTime } = parseTimeRange(
-      currentLesson.time
-    );
-
-    heroEndTime = endTime;
+    heroEndTime =
+      parseTimeRange(
+        currentLesson.time
+      ).endTime;
   } else if (upcomingLesson) {
     heroState = 'upcoming';
-    effectiveHeroLesson = upcomingLesson;
+    effectiveHeroLesson =
+      upcomingLesson;
 
-    heroMinutesUntil = calculateMinutesUntil(
-      upcomingLesson.time,
-      now
-    );
+    heroMinutesUntil =
+      calculateMinutesUntil(
+        upcomingLesson.time,
+        now
+      );
   }
 
   return {
