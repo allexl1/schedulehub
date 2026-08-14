@@ -177,43 +177,13 @@ function AppContent() {
         </div>
       )}
 
-      {/* 5-Tab Content Router */}
-      <main>
-        {activeTab === 'home' && (
-          <HomeView
-            scheduleData={{ student, nextLesson, todaySchedule }}
-            status={statusState}
-            lastUpdatedTimestamp={lastUpdated}
-          />
-        )}
-
-        {activeTab === 'schedule' && (
-          <ScheduleView
-            todaySchedule={todaySchedule}
-            loading={loading}
-            isUsingCache={Boolean(apiError || isOffline)}
-          />
-        )}
-
-        {activeTab === 'teachers' && <TeachersView />}
-
-        {activeTab === 'exams' && <ExamsView />}
-
-        {activeTab === 'settings' && (
-          <SettingsView
-            group={group}
-            setGroup={(newGroup) => {
-              setGroup(newGroup);
-              localStorage.setItem('sh_group', newGroup);
-            }}
-            themeMode={themeMode}
-            setThemeMode={(newTheme) => {
-              setThemeMode(newTheme);
-              localStorage.setItem('sh_theme', newTheme);
-            }}
-          />
-        )}
-      </main>
+<main>
+  <div className="p-8 text-center">
+    <h1 className="text-2xl font-bold">
+      Current tab: {activeTab}
+    </h1>
+  </div>
+</main>
 
       {/* Floating Glass Navigation */}
       <FloatingNav activeTab={activeTab} setActiveTab={handleTabChange} />
