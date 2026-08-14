@@ -8,6 +8,7 @@ import SettingsView from './views/SettingsView';
 import OnboardingView from './views/OnboardingView';
 import { useTelegram } from './hooks/useTelegram';
 import { useOffline } from './hooks/useOffline';
+import SubjectDetailsView from './views/SubjectDetailsView';
 import { LanguageProvider } from './context/LanguageContext';
 
 const FALLBACK_DATA = {
@@ -210,6 +211,17 @@ const titleClass =
         </div>
       )}
 
+if (selectedLesson) {
+  return (
+    <div className="max-w-[440px] mx-auto px-4 pt-5 pb-10">
+      <SubjectDetailsView
+        lesson={selectedLesson}
+        onBack={() => setSelectedLesson(null)}
+      />
+    </div>
+  );
+}
+      
 <main>
   {activeTab === 'home' && (
     <HomeView
@@ -221,10 +233,11 @@ const titleClass =
 
   {activeTab === 'schedule' && (
     <ScheduleView
-      todaySchedule={todaySchedule}
-      loading={loading}
-      isUsingCache={Boolean(apiError || isOffline)}
-    />
+  todaySchedule={todaySchedule}
+  loading={loading}
+  isUsingCache={Boolean(apiError || isOffline)}
+  onLessonClick={setSelectedLesson}
+/>
   )}
 
   {activeTab === 'teachers' && <TeachersView />}
