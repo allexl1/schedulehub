@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect
+} from 'react';
+
 import { translations } from '../constants/translations';
 
-const LanguageContext = createContext();
+const LanguageContext = createContext(null);
 
 export function LanguageProvider({ children }) {
   const [language, setLanguage] = useState(() => {
@@ -15,9 +21,7 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     try {
       localStorage.setItem('sh_language', language);
-    } catch {
-      // ignore storage errors
-    }
+    } catch {}
   }, [language]);
 
   const t = translations[language] || translations.ru;
@@ -39,7 +43,9 @@ export function useLanguage() {
   const context = useContext(LanguageContext);
 
   if (!context) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
+    throw new Error(
+      'useLanguage must be used within a LanguageProvider'
+    );
   }
 
   return context;
