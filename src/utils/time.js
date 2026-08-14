@@ -1,84 +1,115 @@
-export function calculateMinutesUntil(timeSlot, now = new Date()) {
-  const parts = parseTimeRange(timeSlot);
-  if (!parts) return null;
-
-  const [hours, minutes] = parts[0].split(':').map(Number);
-
-  if (isNaN(hours) || isNaN(minutes)) return null;
-
-  const startTime = new Date(now);
-  startTime.setHours(hours, minutes, 0, 0);
-
-  const diffMs = startTime.getTime() - now.getTime();
-
-  if (diffMs <= 0) return 0;
-
-  return Math.round(diffMs / 60000);
-}
-
+/**
+ * Robustly parses time strings such as:
+ * "09:00 - 10:20", "09:00–10:20", "09:00 — 10:20", "09:00"
+ */
 export function parseTimeRange(timeStr) {
-  if (!timeStr || typeof timeStr !== 'string') return null;
-  const normalized = timeStr.replace(/[–—]/g, '-').trim();
-  const parts = normalized.split('-').map((s) => s.trim());
-  if (parts.length < 2) return null;
-  return parts;
+  if (!timeStr || typeof timeStr !== 'string') {
+    return { startTime: null, endTime: null, startMinutes: null, endMinutes: null };
+  }
+
+  const matches = timeStr.match(/(\d{1,2}:\d{2})/g);
+  if (!matches || matches.length === 0) {
+    return { startTime: null, endTime: null, startMinutes: null, endMinutes: null };
+  }
+
+  const startTime = matches[0];
+  const endTime = matches.length > 1 ? matches[1] : null;
+
+  const toMinutes = (t) => {
+    if (!t) return null;
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const startMinutes = toMinutes(startTime);
+  const endMinutes = endTime ? toMinutes(endTime) : (startMinutes !== null ? startMinutes + 80 : null);
+
+  return { startTime, endTime, startMinutes, endMinutes };
 }
 
-export function parseTimeToMinutes(timeStr) {
-  if (!timeStr) return 0;
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  if (isNaN(hours) || isNaN(minutes)) return 0;
-  return hours * 60 + minutes;
+export function parseStartTimeInMinutes(timeStr) {
+  return parseTimeRange(timeStr).startMinutes ?? 0;
 }
 
-export function parseStartTimeInMinutes(timeSlot) {
-  const parts = parseTimeRange(timeSlot);
-  if (!parts) return 0;
-  return parseTimeToMinutes(parts[0]);
+export function calculateMinutesUntil(timeStr, now = new Date()) {
+  const { startMinutes } = parseTimeRange(timeStr);
+  if (startMinutes === null) return null;
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  return startMinutes - currentMinutes;
 }
 
-export function getMinutesUntilEnd(timeSlot, now = new Date()) {
-  const parts = parseTimeRange(timeSlot);
-  if (!parts) return null;
-
-  const [hours, minutes] = parts[1].split(':').map(Number);
-  if (isNaN(hours) || isNaN(minutes)) return null;
-
-  const endTime = new Date(now);
-  endTime.setHours(hours, minutes, 0, 0);
-
-  const diffMs = endTime.getTime() - now.getTime();
-  if (diffMs <= 0) return 0;
-
-  return Math.round(diffMs / 60000);
+/**
+ * Formats room string preventing double prefixes (e.g. "Room Room 302")
+ */
+export function formatRoomString(room, prefix) {
+  if (!room || typeof room !== 'string') return '';
+  const trimmed = room.trim();
+  if (prefix && trimmed.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return trimmed;
+  }
+  return prefix ? `${prefix} ${trimmed}` : trimmed;
 }
 
-export function getClassStatus(timeSlot, isSelectedDayToday, now = new Date()) {
-  if (!timeSlot || !isSelectedDayToday) return 'upcoming';
+/**
+ * Centralized Schedule State Machine
+ * Classifies items into: 'current', 'upcoming', or 'finished'
+ * Supports single fallback item evaluation
+ */
+export function evaluateScheduleLifecycle(scheduleList = [], fallbackItem = null, now = new Date()) {
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const parts = parseTimeRange(timeSlot);
-  if (!parts) return 'upcoming';
+  let currentLesson = null;
+  let upcomingLesson = null;
 
-  const [startH, startM] = parts[0].split(':').map(Number);
-  const [endH, endM] = parts[1].split(':').map(Number);
-  if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 'upcoming';
+  // 1. Evaluate schedule array
+  for (const item of scheduleList) {
+    const { startMinutes, endMinutes } = parseTimeRange(item.time);
+    if (startMinutes === null) continue;
 
-  const start = new Date(now);
-  start.setHours(startH, startM, 0, 0);
+    if (nowMinutes >= startMinutes && (endMinutes === null || nowMinutes < endMinutes)) {
+      if (!currentLesson) currentLesson = item;
+    } else if (startMinutes > nowMinutes) {
+      if (!upcomingLesson) upcomingLesson = item;
+    }
+  }
 
-  const end = new Date(now);
-  end.setHours(endH, endM, 0, 0);
+  // 2. Fallback resolution for standalone nextLesson if list gave no active item
+  if (!currentLesson && !upcomingLesson && fallbackItem) {
+    const { startMinutes, endMinutes } = parseTimeRange(fallbackItem.time);
+    if (startMinutes !== null) {
+      if (nowMinutes >= startMinutes && (endMinutes === null || nowMinutes < endMinutes)) {
+        currentLesson = fallbackItem;
+      } else if (startMinutes > nowMinutes) {
+        upcomingLesson = fallbackItem;
+      }
+    } else {
+      upcomingLesson = fallbackItem;
+    }
+  }
 
-  if (now >= start && now <= end) return 'in_progress';
-  if (now > end) return 'past';
-  return 'upcoming';
-}
+  let heroState = 'finished';
+  let effectiveHeroLesson = null;
+  let heroEndTime = null;
+  let heroMinutesUntil = null;
 
-export function isValidTimeSlot(timeStr) {
-  if (!timeStr || typeof timeStr !== 'string') return false;
-  const parts = parseTimeRange(timeStr);
-  if (!parts) return false;
+  if (currentLesson) {
+    heroState = 'current';
+    effectiveHeroLesson = currentLesson;
+    const { endTime } = parseTimeRange(currentLesson.time);
+    heroEndTime = endTime;
+  } else if (upcomingLesson) {
+    heroState = 'upcoming';
+    effectiveHeroLesson = upcomingLesson;
+    heroMinutesUntil = calculateMinutesUntil(upcomingLesson.time, now);
+  }
 
-  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-  return timeRegex.test(parts[0]) && timeRegex.test(parts[1]);
+  return {
+    currentLesson,
+    upcomingLesson,
+    effectiveHeroLesson,
+    heroState,
+    heroEndTime,
+    heroMinutesUntil
+  };
 }
