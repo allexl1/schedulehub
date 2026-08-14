@@ -116,6 +116,8 @@ export default function HomeView({
                   item.id === lifecycle.upcomingLesson.id
                 );
 
+const lessonType = item.type || '';
+
 const lessonColor =
   lessonType === 'Lecture'
     ? '#2997ff'
@@ -129,13 +131,11 @@ const lessonColor =
     ? '#bf5af2'
     : '#8e8e93';
 
-              const borderIndicatorColor = isCurrent
+const borderIndicatorColor = isCurrent
   ? '#30d158'
   : isNext
   ? '#2997ff'
   : lessonColor;
-
-const lessonType = item.type || '';
 
               const roomText = formatRoomString(
                 item.room,
