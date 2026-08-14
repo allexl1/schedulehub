@@ -179,6 +179,18 @@ const titleClass =
     {greeting}, {displayName} {greetingEmoji}
   </h1>
 
+let greetingEmoji = '👋';
+
+if (hour >= 6 && hour < 12) {
+  greetingEmoji = '☀️';
+} else if (hour >= 12 && hour < 17) {
+  greetingEmoji = '🌤️';
+} else if (hour >= 17 && hour < 22) {
+  greetingEmoji = '🌆';
+} else {
+  greetingEmoji = '🌙';
+}
+
   <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
     Группа {group} • Подгруппа {subgroup}
   </p>
