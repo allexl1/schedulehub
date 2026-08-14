@@ -160,28 +160,26 @@ if (hour >= 6 && hour < 12) {
   
   const displayName = user?.first_name || student?.name || "Student";
   const statusState = isOffline ? 'offline' : apiError ? 'cached' : 'live';
+const weekNumber = student?.currentWeek || 1;
 
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
-      {/* App Header */}
-   <header className="mb-5">
-  <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
+{/* App Header */}
+<header className="mb-6">
+  <h1 className="text-[32px] leading-tight font-bold tracking-tight text-[var(--text-primary)]">
     {greeting}, {displayName}
+    {hour >= 22 || hour < 6
+      ? ' 🌙'
+      : hour < 12
+      ? ' ☀️'
+      : hour < 17
+      ? ' 🌤️'
+      : ' 🌆'}
   </h1>
 
-  <div className="flex items-center gap-2 mt-2 flex-wrap">
-    <span className="px-2.5 py-1 rounded-full bg-[var(--surface-glass)] border border-[var(--border-glass)] text-[11px] font-medium text-[var(--text-secondary)]">
-      {group}
-    </span>
-
-    <span className="px-2.5 py-1 rounded-full bg-[var(--surface-glass)] border border-[var(--border-glass)] text-[11px] font-medium text-[var(--text-secondary)]">
-      ПГ{subgroup}
-    </span>
-
-    <span className="px-2.5 py-1 rounded-full bg-[var(--surface-glass)] border border-[var(--border-glass)] text-[11px] font-medium text-[var(--text-secondary)]">
-      {student?.currentWeek || 1} неделя
-    </span>
-  </div>
+  <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">
+    {group}-{subgroup} • ПГ{subgroup}
+  </p>
 </header>
 
       {/* Outage / Offline Alert Banner */}
