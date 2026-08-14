@@ -1,86 +1,175 @@
 /**
- * Robustly parses time strings such as:
- * "09:00 - 10:20", "09:00–10:20", "09:00 — 10:20", "09:00"
+ * Parse a time string.
+ * Supports:
+ * "09:00 - 10:20"
+ * "09:00–10:20"
+ * "09:00 — 10:20"
+ * "09:00"
+ * "09:00 (lab)"
  */
+
 export function parseTimeRange(timeStr) {
-  if (!timeStr || typeof timeStr !== 'string') {
-    return { startTime: null, endTime: null, startMinutes: null, endMinutes: null };
+  const emptyResult = {
+    startTime: null,
+    endTime: null,
+    startMinutes: null,
+    endMinutes: null
+  };
+
+  if (typeof timeStr !== 'string' || !timeStr.trim()) {
+    return emptyResult;
   }
 
-  const matches = timeStr.match(/(\d{1,2}:\d{2})/g);
+  const matches = timeStr.match(/\d{1,2}:\d{2}/g);
+
   if (!matches || matches.length === 0) {
-    return { startTime: null, endTime: null, startMinutes: null, endMinutes: null };
+    return emptyResult;
   }
 
   const startTime = matches[0];
   const endTime = matches.length > 1 ? matches[1] : null;
 
-  const toMinutes = (t) => {
-    if (!t) return null;
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  };
+  function toMinutes(time) {
+    if (!time) return null;
+
+    const parts = time.split(':');
+
+    if (parts.length !== 2) return null;
+
+    const hours = Number(parts[0]);
+    const minutes = Number(parts[1]);
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+      return null;
+    }
+
+    return hours * 60 + minutes;
+  }
 
   const startMinutes = toMinutes(startTime);
-  const endMinutes = endTime ? toMinutes(endTime) : (startMinutes !== null ? startMinutes + 80 : null);
 
-  return { startTime, endTime, startMinutes, endMinutes };
+  let endMinutes = null;
+
+  if (endTime) {
+    endMinutes = toMinutes(endTime);
+  } else if (startMinutes !== null) {
+    // default lesson duration
+    endMinutes = startMinutes + 80;
+  }
+
+  return {
+    startTime,
+    endTime,
+    startMinutes,
+    endMinutes
+  };
 }
 
 export function parseStartTimeInMinutes(timeStr) {
-  return parseTimeRange(timeStr).startMinutes ?? 0;
+  const parsed = parseTimeRange(timeStr);
+
+  return parsed.startMinutes !== null
+    ? parsed.startMinutes
+    : 0;
 }
 
 export function calculateMinutesUntil(timeStr, now = new Date()) {
-  const { startMinutes } = parseTimeRange(timeStr);
-  if (startMinutes === null) return null;
+  const parsed = parseTimeRange(timeStr);
 
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  return startMinutes - currentMinutes;
-}
-
-/**
- * Formats room string preventing double prefixes (e.g. "Room Room 302")
- */
-export function formatRoomString(room, prefix) {
-  if (!room || typeof room !== 'string') return '';
-  const trimmed = room.trim();
-  if (prefix && trimmed.toLowerCase().startsWith(prefix.toLowerCase())) {
-    return trimmed;
+  if (parsed.startMinutes === null) {
+    return null;
   }
-  return prefix ? `${prefix} ${trimmed}` : trimmed;
+
+  const currentMinutes =
+    now.getHours() * 60 +
+    now.getMinutes();
+
+  return parsed.startMinutes - currentMinutes;
+}
+
+export function formatRoomString(room, prefix) {
+  if (!room) return '';
+
+  const roomText = String(room).trim();
+
+  if (!roomText) return '';
+
+  if (
+    prefix &&
+    roomText.toLowerCase().startsWith(prefix.toLowerCase())
+  ) {
+    return roomText;
+  }
+
+  return prefix
+    ? `${prefix} ${roomText}`
+    : roomText;
 }
 
 /**
- * Centralized Schedule State Machine
- * Classifies items into: 'current', 'upcoming', or 'finished'
- * Supports single fallback item evaluation
+ * Central lifecycle evaluator.
  */
-export function evaluateScheduleLifecycle(scheduleList = [], fallbackItem = null, now = new Date()) {
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+export function evaluateScheduleLifecycle(
+  scheduleList = [],
+  fallbackItem = null,
+  now = new Date()
+) {
+  const currentMinutes =
+    now.getHours() * 60 +
+    now.getMinutes();
 
   let currentLesson = null;
   let upcomingLesson = null;
+  let nearestUpcomingStart = Infinity;
 
-  // 1. Evaluate schedule array
-  for (const item of scheduleList) {
-    const { startMinutes, endMinutes } = parseTimeRange(item.time);
-    if (startMinutes === null) continue;
+  const safeSchedule = Array.isArray(scheduleList)
+    ? scheduleList
+    : [];
 
-    if (nowMinutes >= startMinutes && (endMinutes === null || nowMinutes < endMinutes)) {
-      if (!currentLesson) currentLesson = item;
-    } else if (startMinutes > nowMinutes) {
-      if (!upcomingLesson) upcomingLesson = item;
+  for (const item of safeSchedule) {
+    if (!item) continue;
+
+    const parsed = parseTimeRange(item.time);
+
+    if (parsed.startMinutes === null) {
+      continue;
+    }
+
+    const isCurrent =
+      currentMinutes >= parsed.startMinutes &&
+      (
+        parsed.endMinutes === null ||
+        currentMinutes < parsed.endMinutes
+      );
+
+    if (isCurrent) {
+      currentLesson = item;
+      break;
+    }
+
+    if (
+      parsed.startMinutes > currentMinutes &&
+      parsed.startMinutes < nearestUpcomingStart
+    ) {
+      nearestUpcomingStart = parsed.startMinutes;
+      upcomingLesson = item;
     }
   }
 
-  // 2. Fallback resolution for standalone nextLesson if list gave no active item
   if (!currentLesson && !upcomingLesson && fallbackItem) {
-    const { startMinutes, endMinutes } = parseTimeRange(fallbackItem.time);
-    if (startMinutes !== null) {
-      if (nowMinutes >= startMinutes && (endMinutes === null || nowMinutes < endMinutes)) {
+    const parsed = parseTimeRange(fallbackItem.time);
+
+    if (parsed.startMinutes !== null) {
+      const isCurrent =
+        currentMinutes >= parsed.startMinutes &&
+        (
+          parsed.endMinutes === null ||
+          currentMinutes < parsed.endMinutes
+        );
+
+      if (isCurrent) {
         currentLesson = fallbackItem;
-      } else if (startMinutes > nowMinutes) {
+      } else if (parsed.startMinutes > currentMinutes) {
         upcomingLesson = fallbackItem;
       }
     } else {
@@ -96,12 +185,16 @@ export function evaluateScheduleLifecycle(scheduleList = [], fallbackItem = null
   if (currentLesson) {
     heroState = 'current';
     effectiveHeroLesson = currentLesson;
-    const { endTime } = parseTimeRange(currentLesson.time);
-    heroEndTime = endTime;
+
+    const parsed = parseTimeRange(currentLesson.time);
+    heroEndTime = parsed.endTime;
   } else if (upcomingLesson) {
     heroState = 'upcoming';
     effectiveHeroLesson = upcomingLesson;
-    heroMinutesUntil = calculateMinutesUntil(upcomingLesson.time, now);
+    heroMinutesUntil = calculateMinutesUntil(
+      upcomingLesson.time,
+      now
+    );
   }
 
   return {
