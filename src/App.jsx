@@ -185,21 +185,15 @@ const titleClass =
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 {/* App Header */}
 <header className="mb-6">
-<div className="flex flex-wrap items-center gap-2">
   <h1
     className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)] break-all`}
   >
-    {greeting}, {displayName}
+    {greeting}, {displayName} {greetingEmoji}
   </h1>
 
-  <span className="text-[28px] leading-none shrink-0">
-    {greetingEmoji}
-  </span>
-</div>
-
-<p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
-  Группа: {group} • Подгруппа: {subgroup} • Неделя: {weekNumber}
-</p>
+  <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
+    Группа: {group} • Подгруппа: {subgroup} • Неделя: {weekNumber}
+  </p>
 </header>
 
       {/* Outage / Offline Alert Banner */}
