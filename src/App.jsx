@@ -165,20 +165,25 @@ const weekNumber = student?.currentWeek || 1;
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 {/* App Header */}
-<header className="mb-6">
-  <h1 className="text-[32px] leading-tight font-bold tracking-tight text-[var(--text-primary)]">
-    {greeting}, {displayName}
-    {hour >= 22 || hour < 6
-      ? ' 🌙'
-      : hour < 12
-      ? ' ☀️'
-      : hour < 17
-      ? ' 🌤️'
-      : ' 🌆'}
+<header className="mb-5">
+  <h1
+    className={`
+      font-bold tracking-tight text-[var(--text-primary)]
+      leading-tight
+      ${
+        displayName.length > 18
+          ? 'text-3xl'
+          : displayName.length > 12
+          ? 'text-4xl'
+          : 'text-5xl'
+      }
+    `}
+  >
+    {greeting}, {displayName} {greetingEmoji}
   </h1>
 
-  <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">
-    {group}-{subgroup} • ПГ{subgroup}
+  <p className="mt-2 text-sm text-[var(--text-secondary)] font-medium">
+    Группа {group} • Подгруппа {subgroup}
   </p>
 </header>
 
