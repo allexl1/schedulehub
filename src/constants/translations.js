@@ -1,5 +1,17 @@
 export const translations = {
   ru: {
+    nav: {
+      home: 'Главная',
+      schedule: 'Расписание',
+      teachers: 'Преподаватели',
+      exams: 'Экзамены',
+      settings: 'Настройки'
+    },
+
+    settings: {
+      language: 'Язык'
+    },
+
     inProgress: 'Идёт сейчас',
     happeningNow: 'Идёт прямо сейчас',
     until: 'до',
@@ -22,7 +34,20 @@ export const translations = {
     cached: 'Кеш',
     offline: 'Не в сети'
   },
+
   en: {
+    nav: {
+      home: 'Home',
+      schedule: 'Schedule',
+      teachers: 'Teachers',
+      exams: 'Exams',
+      settings: 'Settings'
+    },
+
+    settings: {
+      language: 'Language'
+    },
+
     inProgress: 'In progress',
     happeningNow: 'Happening now',
     until: 'until',
