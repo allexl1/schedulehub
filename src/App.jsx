@@ -185,17 +185,17 @@ const titleClass =
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 {/* App Header */}
 <header className="mb-6">
-  <div className="flex items-center gap-2">
-    <h1
-      className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)] flex-1 min-w-0`}
-    >
-      {greeting}, {displayName}
-    </h1>
+<div className="flex items-center gap-2">
+  <h1
+    className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)]`}
+  >
+    {greeting}, {displayName}
+  </h1>
 
-    <span className="text-[32px] leading-none shrink-0">
-      {greetingEmoji}
-    </span>
-  </div>
+  <span className="text-[28px] leading-none">
+    {greetingEmoji}
+  </span>
+</div>
 
 <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
   Группа: {group} • Подгруппа: {subgroup} • Неделя: {weekNumber}
