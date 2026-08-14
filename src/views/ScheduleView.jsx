@@ -7,7 +7,7 @@ import {
   parseTimeRange
 } from '../utils/time';
 
-export default function ScheduleView({ todaySchedule = [], loading = false }) {
+export default function ScheduleView({ todaySchedule = [], loading = false, onLessonClick }) {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // Real-time tick state (updates every 30 seconds)
@@ -215,12 +215,14 @@ const startTime =
 const endTime =
   timeParts?.endTime || '10:20';
             return (
-              <div
-                key={item.id || idx}
-                className={`p-4 flex items-center justify-between gap-3 transition-all ${
-                  isPast ? 'opacity-35' : 'opacity-100'
-                } ${isInProgress ? 'bg-white/10 dark:bg-white/10' : ''}`}
-              >
+            <button
+  key={item.id || idx}
+  type="button"
+  onClick={() => onLessonClick?.(item)}
+  className={`w-full p-4 flex items-center justify-between gap-3 transition-all text-left ${
+    isPast ? 'opacity-35' : 'opacity-100'
+  } ${isInProgress ? 'bg-white/10 dark:bg-white/10' : ''}`}
+>
                 {/* Time Column */}
                 <div className="w-24 shrink-0 font-mono">
                   <span
@@ -237,7 +239,7 @@ const endTime =
                   <span className="block text-[10px] text-[var(--text-secondary)] font-medium">
                     {endTime}
                   </span>
-                </div>
+                </button>
 
                 {/* Lesson Details */}
                 <div className="flex-1 min-w-0">
