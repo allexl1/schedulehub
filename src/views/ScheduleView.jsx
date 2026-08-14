@@ -125,6 +125,7 @@ return {
   ...item,
   status: finalStatus
 };
+  });
 
   return (
     <div className="space-y-5">
