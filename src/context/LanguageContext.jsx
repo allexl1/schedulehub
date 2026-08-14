@@ -22,9 +22,17 @@ export function LanguageProvider({ children }) {
 
   const dictionary = translations[language] || translations.ru;
 
-const t = (key) => {
-  return dictionary[key] || key;
-};
+const t = (key) => dictionary[key] || key;
+
+// expose both
+<LanguageContext.Provider
+  value={{
+    language,
+    setLanguage,
+    t,
+    dictionary
+  }}
+>
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t }}>
