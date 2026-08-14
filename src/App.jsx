@@ -175,29 +175,27 @@ if (hour >= 6 && hour < 12) {
 }
 
 const titleClass =
-  greetingText.length > 50
+  greetingText.length > 30
     ? 'text-xl'
-    : greetingText.length > 40
+    : greetingText.length > 20
     ? 'text-2xl'
-    : greetingText.length > 30
-    ? 'text-3xl'
     : 'text-[32px]';
 
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 {/* App Header */}
 <header className="mb-6">
- <div className="flex items-end gap-2 flex-wrap">
-  <h1
-    className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)] min-w-0`}
-  >
-    {greeting}, {displayName}
-  </h1>
+  <div className="flex items-center gap-2">
+    <h1
+      className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)] flex-1 min-w-0`}
+    >
+      {greeting}, {displayName}
+    </h1>
 
-  <span className="text-3xl shrink-0">
-    {greetingEmoji}
-  </span>
-</div>
+    <span className="text-[32px] leading-none shrink-0">
+      {greetingEmoji}
+    </span>
+  </div>
 
 <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
   Группа: {group} • Подгруппа: {subgroup} • Неделя: {weekNumber}
