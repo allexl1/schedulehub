@@ -11,18 +11,28 @@ export default function NextClassCard({
   const { t } = useLanguage();
 
   if (!nextLesson || lessonState === 'finished') {
-    return (
-      <div className="rounded-2xl bg-[var(--surface-glass)] border border-[var(--border-glass)] p-5 text-center space-y-1 shadow-sm">
-        <h3 className="text-sm font-bold text-[var(--text-primary)]">
-          {t('noMoreClassesToday')}
-        </h3>
+  return (
+    <div className="rounded-2xl bg-[var(--surface-glass)] border border-[var(--border-glass)] p-5 shadow-sm">
+      <div className="flex items-center gap-4">
 
-        <p className="text-xs text-[var(--text-secondary)] opacity-70">
-          {t('allActivitiesFinished')}
-        </p>
+        <div className="w-14 h-14 rounded-full bg-[#2997ff]/10 flex items-center justify-center shrink-0">
+          <span className="text-2xl">📅</span>
+        </div>
+
+        <div className="min-w-0">
+          <h3 className="text-xl font-bold text-[var(--text-primary)]">
+            {t('noMoreClassesToday')}
+          </h3>
+
+          <p className="text-sm text-[var(--text-secondary)] opacity-70 mt-1">
+            {t('allActivitiesFinished')}
+          </p>
+        </div>
+
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   const isPersonal = Boolean(nextLesson.isPersonal);
 
