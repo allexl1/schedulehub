@@ -144,25 +144,45 @@ function AppContent() {
     ? scheduleData.todaySchedule
     : FALLBACK_DATA.todaySchedule;
 
+const hour = new Date().getHours();
+
+let greeting = 'Hello';
+
+if (hour >= 6 && hour < 12) {
+  greeting = 'Доброе утро';
+} else if (hour >= 12 && hour < 17) {
+  greeting = 'Добрый день';
+} else if (hour >= 17 && hour < 22) {
+  greeting = 'Добрый вечер';
+} else {
+  greeting = 'Доброй ночи';
+}
+  
   const displayName = user?.first_name || student?.name || "Student";
   const statusState = isOffline ? 'offline' : apiError ? 'cached' : 'live';
 
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
       {/* App Header */}
-      <header className="flex justify-between items-center mb-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
-            Hello, {displayName} 👋
-          </h1>
-          <p className="text-xs font-medium text-[var(--text-secondary)] mt-0.5">
-            Group {group} • Week {student?.currentWeek || 1}
-          </p>
-        </div>
-        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#2997ff]/10 text-[#2997ff] border border-[#2997ff]/20">
-          Subgroup {subgroup}
-        </span>
-      </header>
+   <header className="mb-5">
+  <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
+    {greeting}, {displayName}
+  </h1>
+
+  <div className="flex items-center gap-2 mt-2 flex-wrap">
+    <span className="px-2.5 py-1 rounded-full bg-[var(--surface-glass)] border border-[var(--border-glass)] text-[11px] font-medium text-[var(--text-secondary)]">
+      {group}
+    </span>
+
+    <span className="px-2.5 py-1 rounded-full bg-[var(--surface-glass)] border border-[var(--border-glass)] text-[11px] font-medium text-[var(--text-secondary)]">
+      ПГ{subgroup}
+    </span>
+
+    <span className="px-2.5 py-1 rounded-full bg-[var(--surface-glass)] border border-[var(--border-glass)] text-[11px] font-medium text-[var(--text-secondary)]">
+      {student?.currentWeek || 1} неделя
+    </span>
+  </div>
+</header>
 
       {/* Outage / Offline Alert Banner */}
       {apiError && (
