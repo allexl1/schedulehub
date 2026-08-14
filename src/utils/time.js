@@ -1,61 +1,57 @@
 /**
- * Parse a time string.
- * Supports:
+ * Parse time ranges like:
  * "09:00 - 10:20"
  * "09:00–10:20"
  * "09:00 — 10:20"
  * "09:00"
- * "09:00 (lab)"
  */
-
 export function parseTimeRange(timeStr) {
-  const emptyResult = {
-    startTime: null,
-    endTime: null,
-    startMinutes: null,
-    endMinutes: null
-  };
-
-  if (typeof timeStr !== 'string' || !timeStr.trim()) {
-    return emptyResult;
+  if (!timeStr || typeof timeStr !== 'string') {
+    return {
+      startTime: null,
+      endTime: null,
+      startMinutes: null,
+      endMinutes: null
+    };
   }
 
   const matches = timeStr.match(/\d{1,2}:\d{2}/g);
 
   if (!matches || matches.length === 0) {
-    return emptyResult;
+    return {
+      startTime: null,
+      endTime: null,
+      startMinutes: null,
+      endMinutes: null
+    };
   }
 
   const startTime = matches[0];
-  const endTime = matches.length > 1 ? matches[1] : null;
+  const endTime = matches[1] || null;
 
-  function toMinutes(time) {
-    if (!time) return null;
+  const toMinutes = (value) => {
+    if (!value) return null;
 
-    const parts = time.split(':');
+    const [hours, minutes] = value.split(':').map(Number);
 
-    if (parts.length !== 2) return null;
-
-    const hours = Number(parts[0]);
-    const minutes = Number(parts[1]);
-
-    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    if (
+      Number.isNaN(hours) ||
+      Number.isNaN(minutes)
+    ) {
       return null;
     }
 
     return hours * 60 + minutes;
-  }
+  };
 
   const startMinutes = toMinutes(startTime);
 
-  let endMinutes = null;
-
-  if (endTime) {
-    endMinutes = toMinutes(endTime);
-  } else if (startMinutes !== null) {
-    // default lesson duration
-    endMinutes = startMinutes + 80;
-  }
+  const endMinutes =
+    endTime !== null
+      ? toMinutes(endTime)
+      : startMinutes !== null
+      ? startMinutes + 80
+      : null;
 
   return {
     startTime,
@@ -66,48 +62,63 @@ export function parseTimeRange(timeStr) {
 }
 
 export function parseStartTimeInMinutes(timeStr) {
-  const parsed = parseTimeRange(timeStr);
-
-  return parsed.startMinutes !== null
-    ? parsed.startMinutes
-    : 0;
+  return parseTimeRange(timeStr).startMinutes ?? 0;
 }
 
 export function calculateMinutesUntil(timeStr, now = new Date()) {
-  const parsed = parseTimeRange(timeStr);
+  const { startMinutes } = parseTimeRange(timeStr);
 
-  if (parsed.startMinutes === null) {
+  if (startMinutes === null) {
     return null;
   }
 
   const currentMinutes =
-    now.getHours() * 60 +
-    now.getMinutes();
+    now.getHours() * 60 + now.getMinutes();
 
-  return parsed.startMinutes - currentMinutes;
-}
-
-export function formatRoomString(room, prefix) {
-  if (!room) return '';
-
-  const roomText = String(room).trim();
-
-  if (!roomText) return '';
-
-  if (
-    prefix &&
-    roomText.toLowerCase().startsWith(prefix.toLowerCase())
-  ) {
-    return roomText;
-  }
-
-  return prefix
-    ? `${prefix} ${roomText}`
-    : roomText;
+  return startMinutes - currentMinutes;
 }
 
 /**
- * Central lifecycle evaluator.
+ * Used by PersonalEventModal.jsx
+ */
+export function isValidTimeSlot(timeStr) {
+  const parsed = parseTimeRange(timeStr);
+
+  return (
+    parsed.startMinutes !== null &&
+    parsed.endMinutes !== null &&
+    parsed.endMinutes > parsed.startMinutes
+  );
+}
+
+/**
+ * Prevent:
+ * "Room Room 302"
+ * "Ауд. Ауд. 302"
+ */
+export function formatRoomString(room, prefix = '') {
+  if (!room || typeof room !== 'string') {
+    return '';
+  }
+
+  const trimmed = room.trim();
+
+  if (!prefix) {
+    return trimmed;
+  }
+
+  const normalizedRoom = trimmed.toLowerCase();
+  const normalizedPrefix = prefix.toLowerCase();
+
+  if (normalizedRoom.startsWith(normalizedPrefix)) {
+    return trimmed;
+  }
+
+  return `${prefix} ${trimmed}`;
+}
+
+/**
+ * Schedule lifecycle resolver
  */
 export function evaluateScheduleLifecycle(
   scheduleList = [],
@@ -115,61 +126,66 @@ export function evaluateScheduleLifecycle(
   now = new Date()
 ) {
   const currentMinutes =
-    now.getHours() * 60 +
-    now.getMinutes();
+    now.getHours() * 60 + now.getMinutes();
 
   let currentLesson = null;
   let upcomingLesson = null;
-  let nearestUpcomingStart = Infinity;
 
-  const safeSchedule = Array.isArray(scheduleList)
-    ? scheduleList
-    : [];
-
-  for (const item of safeSchedule) {
+  for (const item of scheduleList) {
     if (!item) continue;
 
-    const parsed = parseTimeRange(item.time);
+    const {
+      startMinutes,
+      endMinutes
+    } = parseTimeRange(item.time);
 
-    if (parsed.startMinutes === null) {
-      continue;
-    }
+    if (startMinutes === null) continue;
 
     const isCurrent =
-      currentMinutes >= parsed.startMinutes &&
-      (
-        parsed.endMinutes === null ||
-        currentMinutes < parsed.endMinutes
-      );
+      currentMinutes >= startMinutes &&
+      (endMinutes === null ||
+        currentMinutes < endMinutes);
 
-    if (isCurrent) {
+    const isUpcoming =
+      startMinutes > currentMinutes;
+
+    if (isCurrent && !currentLesson) {
       currentLesson = item;
-      break;
     }
 
     if (
-      parsed.startMinutes > currentMinutes &&
-      parsed.startMinutes < nearestUpcomingStart
+      isUpcoming &&
+      !upcomingLesson
     ) {
-      nearestUpcomingStart = parsed.startMinutes;
       upcomingLesson = item;
     }
   }
 
-  if (!currentLesson && !upcomingLesson && fallbackItem) {
-    const parsed = parseTimeRange(fallbackItem.time);
+  /**
+   * Standalone nextLesson fallback
+   */
+  if (
+    !currentLesson &&
+    !upcomingLesson &&
+    fallbackItem
+  ) {
+    const {
+      startMinutes,
+      endMinutes
+    } = parseTimeRange(fallbackItem.time);
 
-    if (parsed.startMinutes !== null) {
+    if (startMinutes !== null) {
       const isCurrent =
-        currentMinutes >= parsed.startMinutes &&
-        (
-          parsed.endMinutes === null ||
-          currentMinutes < parsed.endMinutes
-        );
+        currentMinutes >= startMinutes &&
+        (endMinutes === null ||
+          currentMinutes < endMinutes);
+
+      const isUpcoming =
+        startMinutes > currentMinutes;
 
       if (isCurrent) {
         currentLesson = fallbackItem;
-      } else if (parsed.startMinutes > currentMinutes) {
+      } else if (isUpcoming) {
         upcomingLesson = fallbackItem;
       }
     } else {
@@ -186,11 +202,15 @@ export function evaluateScheduleLifecycle(
     heroState = 'current';
     effectiveHeroLesson = currentLesson;
 
-    const parsed = parseTimeRange(currentLesson.time);
-    heroEndTime = parsed.endTime;
+    const { endTime } = parseTimeRange(
+      currentLesson.time
+    );
+
+    heroEndTime = endTime;
   } else if (upcomingLesson) {
     heroState = 'upcoming';
     effectiveHeroLesson = upcomingLesson;
+
     heroMinutesUntil = calculateMinutesUntil(
       upcomingLesson.time,
       now
