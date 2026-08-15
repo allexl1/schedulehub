@@ -217,10 +217,9 @@ if (selectedLesson) {
   )}
 
   {activeTab === 'schedule' && (
-    <ScheduleView
-  todaySchedule={todaySchedule}
+  <ScheduleView
+  scheduleData={scheduleData}
   loading={loading}
-  onLessonClick={setSelectedLesson}
 />
   )}
 
