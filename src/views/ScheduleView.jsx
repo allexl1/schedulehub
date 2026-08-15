@@ -8,6 +8,13 @@ import {
 } from '../utils/time';
 
 export default function ScheduleView({ todaySchedule = [], loading = false, onLessonClick }) {
+  const [scheduleMode, setScheduleMode] = useState(() => {
+  return localStorage.getItem('sh_schedule_mode') || 'weekday';
+});
+
+useEffect(() => {
+  localStorage.setItem('sh_schedule_mode', scheduleMode);
+}, [scheduleMode]);
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // Real-time tick state (updates every 30 seconds)
