@@ -111,11 +111,21 @@ const dayPersonalEvents = personalEvents.filter(
   (ev) => ev.day === selectedDay
 );
 
-const weekdayLessons = resolveLessonsForWeekday(
+const weekdayLessonsByWeek = resolveLessonsForWeekday(
   schedules,
   selectedDay,
   subgroup
-).map(normalizeLesson);
+);
+
+// Flatten all weeks into one lesson array.
+// This is what the current ScheduleView needs because
+// the selected day view displays the complete recurring
+// timetable for that weekday.
+const weekdayLessons = Object.values(
+  weekdayLessonsByWeek
+)
+  .flat()
+  .map(normalizeLesson);
 
 const unmergedSchedule = [
   ...weekdayLessons,
