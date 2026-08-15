@@ -44,7 +44,7 @@ async function setRedisCache(key, value, ttlSeconds = 86400) {
 
 // Fallback mock schedule if BSUIR API blocks Vercel IPs and Redis is empty
 const MOCK_SCHEDULE = {
-  studentGroupDto: { name: '150501' },
+  studentGroupDto: { name: '373902' },
   schedules: {},
   todaySchedules: [
     {
@@ -87,7 +87,7 @@ async function fetchCurrentWeek() {
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=86400');
 
-  const group = req.query.group || '150501';
+  const group = req.query.group || '373902';
   const cacheKey = `schedule:${group}`;
 
   let rawSchedule = null;
