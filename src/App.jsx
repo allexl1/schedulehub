@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-
 import FloatingNav from './components/FloatingNav';
 import HomeView from './views/HomeView';
 import ScheduleView from './views/ScheduleView';
@@ -13,38 +12,15 @@ import { useTelegram } from './hooks/useTelegram';
 import { useOffline } from './hooks/useOffline';
 import { LanguageProvider } from './context/LanguageContext';
 
-/*
- * ============================================================
- * EMPTY DATA
- * ============================================================
- *
- * This is the canonical frontend schedule shape.
- *
- * Backend:
- *
- * {
- *   success,
- *   status,
- *   cached,
- *   fallback,
- *   stale,
- *   debug,
- *   data: {
- *     studentGroup,
- *     schedules,
- *     todaySchedules,
- *     exams,
- *     currentWeek,
- *     nextLesson
- *   }
- * }
- *
- * App stores only the contents of `data`, plus the status fields.
- */
-
 const EMPTY_DATA = {
   studentGroup: null,
+
+  // Current/active timetable.
   schedules: {},
+
+  // BSUIR sometimes provides the timetable as nextSchedules.
+  nextSchedules: {},
+
   todaySchedules: [],
   exams: [],
   currentWeek: 1,
@@ -53,79 +29,149 @@ const EMPTY_DATA = {
   cached: false,
   fallback: false,
   stale: false,
-  status: 'unknown',
+
+  status: null,
   debug: null
 };
 
 /*
- * ============================================================
- * SCHEDULE DATA NORMALIZER
- * ============================================================
+ * Converts any object-like timetable into a safe object.
+ */
+function normalizeSchedules(value) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  ) {
+    return value;
+  }
+
+  return {};
+}
+
+/*
+ * The BSUIR API currently may return:
  *
- * Accepts both the new backend format and some older formats
- * that may still exist in localStorage.
+ * {
+ *   schedules: null,
+ *   nextSchedules: {
+ *     "Понедельник": [...],
+ *     "Вторник": [...]
+ *   }
+ * }
+ *
+ * Older/backend variants may return:
+ *
+ * {
+ *   schedules: {
+ *     "Понедельник": [...]
+ *   }
+ * }
+ *
+ * The frontend should support both.
  */
 function normalizeScheduleData(data) {
   if (!data || typeof data !== 'object') {
     return { ...EMPTY_DATA };
   }
 
+  const rawSchedules = normalizeSchedules(
+    data.schedules
+  );
+
+  const rawNextSchedules = normalizeSchedules(
+    data.nextSchedules
+  );
+
+  /*
+   * IMPORTANT:
+   *
+   * If `schedules` is empty but `nextSchedules` contains
+   * actual timetable data, use nextSchedules as the main
+   * schedule.
+   */
+  const hasCurrentSchedules =
+    Object.keys(rawSchedules).length > 0;
+
+  const hasNextSchedules =
+    Object.keys(rawNextSchedules).length > 0;
+
   const schedules =
-    data.schedules &&
-    typeof data.schedules === 'object' &&
-    !Array.isArray(data.schedules)
-      ? data.schedules
+    hasCurrentSchedules
+      ? rawSchedules
+      : rawNextSchedules;
+
+  /*
+   * Keep nextSchedules separately too.
+   */
+  const nextSchedules =
+    hasNextSchedules
+      ? rawNextSchedules
       : {};
 
-  const todaySchedules = Array.isArray(data.todaySchedules)
-    ? data.todaySchedules
-    : Array.isArray(data.todaySchedule)
-      ? data.todaySchedule
+  const todaySchedules =
+    Array.isArray(data.todaySchedules)
+      ? data.todaySchedules
+      : Array.isArray(data.todaySchedule)
+        ? data.todaySchedule
+        : [];
+
+  const studentGroup =
+    data.studentGroup ??
+    data.studentGroupDto?.name ??
+    data.student ??
+    null;
+
+  const exams =
+    Array.isArray(data.exams)
+      ? data.exams
       : [];
 
-  const exams = Array.isArray(data.exams)
-    ? data.exams
-    : [];
+  const parsedWeek =
+    Number(data.currentWeek);
 
   const currentWeek =
-    Number(data.currentWeek) > 0
-      ? Number(data.currentWeek)
+    Number.isFinite(parsedWeek) &&
+    parsedWeek > 0
+      ? parsedWeek
       : 1;
 
   /*
-   * The backend calls this `studentGroup`.
+   * If backend already calculated nextLesson, keep it.
    *
-   * Older frontend versions sometimes used `student`.
+   * Otherwise use the first lesson from today's schedule
+   * when available.
    */
-  const studentGroup =
-    data.studentGroup ??
-    data.student ??
+  let nextLesson =
+    data.nextLesson ??
     null;
+
+  if (!nextLesson && todaySchedules.length > 0) {
+    nextLesson = todaySchedules[0];
+  }
 
   return {
     ...EMPTY_DATA,
     ...data,
 
     studentGroup,
+
     schedules,
+    nextSchedules,
+
     todaySchedules,
     exams,
     currentWeek,
 
-    nextLesson:
-      data.nextLesson ??
-      (todaySchedules.length > 0
-        ? todaySchedules[0]
-        : null),
+    nextLesson,
 
     cached: Boolean(data.cached),
     fallback: Boolean(data.fallback),
     stale: Boolean(data.stale),
 
     status:
-      typeof data.status === 'string'
-        ? data.status
-        : 'unknown',
+      data.status ??
+      null,
 
     debug:
       data.debug ??
@@ -134,140 +180,96 @@ function normalizeScheduleData(data) {
 }
 
 /*
- * ============================================================
- * BACKEND RESPONSE NORMALIZER
- * ============================================================
- *
- * This is intentionally separate from normalizeScheduleData().
- *
- * `json` is the complete API response.
+ * Counts all lessons in a timetable object.
  *
  * Example:
  *
  * {
- *   success: true,
- *   status: "live",
- *   cached: false,
- *   fallback: false,
- *   stale: false,
- *   data: {
- *     schedules: {...}
- *   }
+ *   "Понедельник": [lesson, lesson],
+ *   "Вторник": [lesson]
  * }
+ *
+ * => 3
  */
-function normalizeApiResponse(json) {
+function countScheduleLessons(schedules) {
+  if (
+    !schedules ||
+    typeof schedules !== 'object'
+  ) {
+    return 0;
+  }
+
+  return Object.values(schedules).reduce(
+    (total, dayLessons) => {
+      if (Array.isArray(dayLessons)) {
+        return total + dayLessons.length;
+      }
+
+      return total;
+    },
+    0
+  );
+}
+
+/*
+ * Backend API status.
+ */
+function getApiStatus(json, normalizedData) {
   if (!json || typeof json !== 'object') {
     return {
-      ok: false,
-      error:
+      state: 'error',
+      message:
         'The schedule server returned an invalid response.'
     };
   }
 
-  if (json.success !== true) {
+  /*
+   * Backend explicitly says fallback.
+   */
+  if (json.fallback === true) {
     return {
-      ok: false,
-      error:
-        json.error ||
-        json.message ||
-        'The schedule server rejected the request.'
+      state: 'fallback',
+      message:
+        'BSUIR data is temporarily unavailable. No live timetable data was received.'
     };
   }
 
-  if (!json.data || typeof json.data !== 'object') {
+  /*
+   * Backend cache.
+   */
+  if (json.cached === true) {
     return {
-      ok: false,
-      error:
-        'The schedule server returned no timetable data.'
+      state: 'cached',
+      message:
+        'BSUIR is temporarily unavailable. Showing the latest cached timetable.'
+    };
+  }
+
+  /*
+   * Backend says stale.
+   */
+  if (json.stale === true) {
+    return {
+      state: 'stale',
+      message:
+        'The timetable may be out of date because live BSUIR data was unavailable.'
     };
   }
 
   /*
    * IMPORTANT:
    *
-   * The backend status lives on `json`, not inside `json.data`.
-   */
-  const normalizedData = normalizeScheduleData({
-    ...json.data,
-
-    cached: json.cached,
-    fallback: json.fallback,
-    stale: json.stale,
-    status: json.status,
-    debug: json.debug
-  });
-
-  return {
-    ok: true,
-    data: normalizedData,
-
-    status:
-      typeof json.status === 'string'
-        ? json.status
-        : json.fallback
-          ? 'fallback'
-          : json.cached
-            ? 'cached'
-            : 'live',
-
-    cached: Boolean(json.cached),
-    fallback: Boolean(json.fallback),
-    stale: Boolean(json.stale),
-
-    debug:
-      json.debug ??
-      null
-  };
-}
-
-/*
- * ============================================================
- * API STATUS MESSAGE
- * ============================================================
- */
-function getApiStatus(response) {
-  if (!response || !response.ok) {
-    return {
-      state: 'error',
-      message:
-        response?.error ||
-        'Unable to load the academic timetable.'
-    };
-  }
-
-  /*
-   * Backend explicitly says fallback.
+   * `schedules: null` is NOT necessarily an error.
    *
-   * This means the API endpoint itself worked, but BSUIR and
-   * Redis did not provide usable timetable data.
+   * Your current BSUIR response has valid lessons in
+   * `nextSchedules`.
    */
-  if (response.fallback) {
-    return {
-      state: 'fallback',
-      message:
-        'Live BSUIR timetable data is unavailable and no cached timetable was found.'
-    };
-  }
+  const lessonCount =
+    countScheduleLessons(
+      normalizedData?.schedules
+    );
 
-  /*
-   * Backend served Redis data.
-   */
-  if (response.cached) {
-    return {
-      state: 'cached',
-      message:
-        'Showing the latest saved timetable because live BSUIR data was unavailable.'
-    };
-  }
-
-  /*
-   * Live BSUIR data.
-   */
-  if (
-    response.status === 'live' &&
-    !response.fallback &&
-    !response.cached
-  ) {
+  if (lessonCount > 0) {
     return {
       state: 'live',
       message: null
@@ -275,13 +277,17 @@ function getApiStatus(response) {
   }
 
   /*
-   * Backend may mark a response stale.
+   * Backend can technically report success/live while
+   * returning no lessons.
    */
-  if (response.stale) {
+  if (
+    json.success === true &&
+    json.status === 'live'
+  ) {
     return {
-      state: 'stale',
+      state: 'empty',
       message:
-        'The timetable may be out of date.'
+        'The BSUIR server responded successfully, but no timetable entries were returned.'
     };
   }
 
@@ -292,28 +298,23 @@ function getApiStatus(response) {
 }
 
 /*
- * ============================================================
- * HAS SCHEDULE
- * ============================================================
+ * Try to obtain today's lessons from the backend response.
  *
- * Used only for deciding whether we actually have timetable
- * information. An empty day does NOT mean the entire API failed.
+ * We intentionally do NOT invent today's lessons from
+ * nextSchedules because nextSchedules is a recurring weekly
+ * timetable and may contain week-specific lessons.
  */
-function hasScheduleData(data) {
-  return Boolean(
-    data &&
-    data.schedules &&
-    typeof data.schedules === 'object' &&
-    !Array.isArray(data.schedules) &&
-    Object.keys(data.schedules).length > 0
-  );
+function getTodaySchedule(data) {
+  if (
+    Array.isArray(data?.todaySchedules) &&
+    data.todaySchedules.length > 0
+  ) {
+    return data.todaySchedules;
+  }
+
+  return [];
 }
 
-/*
- * ============================================================
- * APP CONTENT
- * ============================================================
- */
 function AppContent() {
   const {
     user,
@@ -330,38 +331,58 @@ function AppContent() {
     useState(null);
 
   const [isOnboarded, setIsOnboarded] =
-    useState(
-      () =>
-        localStorage.getItem(
-          'sh_onboarded'
-        ) === 'true'
-    );
+    useState(() => {
+      try {
+        return (
+          localStorage.getItem(
+            'sh_onboarded'
+          ) === 'true'
+        );
+      } catch {
+        return false;
+      }
+    });
 
   const [group, setGroup] =
-    useState(
-      () =>
-        localStorage.getItem(
-          'sh_group'
-        ) || '150501'
-    );
+    useState(() => {
+      try {
+        return (
+          localStorage.getItem(
+            'sh_group'
+          ) || '373901'
+        );
+      } catch {
+        return '373901';
+      }
+    });
 
   const [subgroup, setSubgroup] =
-    useState(
-      () =>
-        Number(
-          localStorage.getItem(
-            'sh_subgroup'
-          )
-        ) || 1
-    );
+    useState(() => {
+      try {
+        return (
+          Number(
+            localStorage.getItem(
+              'sh_subgroup'
+            )
+          ) || 1
+        );
+      } catch {
+        return 1;
+      }
+    });
 
   const [themeMode, setThemeMode] =
-    useState(
-      () =>
-        localStorage.getItem(
-          'sh_theme'
-        ) || 'system'
-    );
+    useState(() => {
+      try {
+        return (
+          localStorage.getItem(
+            'sh_theme'
+          ) || 'system'
+        );
+      } catch {
+        return 'system';
+      }
+    });
 
   const [loading, setLoading] =
     useState(true);
@@ -373,9 +394,7 @@ function AppContent() {
     useState('loading');
 
   /*
-   * ============================================================
-   * LOAD LOCAL CACHE
-   * ============================================================
+   * Load cached timetable.
    */
   const [scheduleData, setScheduleData] =
     useState(() => {
@@ -410,17 +429,20 @@ function AppContent() {
     });
 
   const [lastUpdated, setLastUpdated] =
-    useState(
-      () =>
-        localStorage.getItem(
-          'sh_cache_timestamp'
-        ) || null
-    );
+    useState(() => {
+      try {
+        return (
+          localStorage.getItem(
+            'sh_cache_timestamp'
+          ) || null
+        );
+      } catch {
+        return null;
+      }
+    });
 
   /*
-   * ============================================================
-   * THEME
-   * ============================================================
+   * Theme.
    */
   useEffect(() => {
     const root =
@@ -445,51 +467,47 @@ function AppContent() {
   ]);
 
   /*
-   * ============================================================
-   * FETCH SCHEDULE
-   * ============================================================
+   * Fetch timetable.
    */
   useEffect(() => {
     let cancelled = false;
 
     async function fetchSchedule() {
-      if (!group) {
-        if (!cancelled) {
-          setLoading(false);
-          setApiState('error');
-          setApiError(
-            'No student group has been selected.'
-          );
-        }
+      const normalizedGroup =
+        String(group || '').trim();
 
+      if (!normalizedGroup) {
+        setLoading(false);
+        setApiState('error');
+        setApiError(
+          'No student group has been selected.'
+        );
         return;
       }
 
       /*
-       * ========================================================
-       * OFFLINE
-       * ========================================================
+       * Offline.
        */
       if (isOffline) {
         if (!cancelled) {
           setLoading(false);
 
-          const hasCached =
-            hasScheduleData(
-              scheduleData
-            );
+          const hasCachedSchedule =
+            countScheduleLessons(
+              scheduleData?.schedules
+            ) > 0;
 
-          if (hasCached) {
-            setApiState('cached');
-            setApiError(
-              'Device is offline. Showing the latest saved timetable.'
-            );
-          } else {
-            setApiState('offline');
-            setApiError(
-              'Device is offline and no cached timetable is available.'
-            );
-          }
+          setApiState(
+            hasCachedSchedule
+              ? 'cached'
+              : 'offline'
+          );
+
+          setApiError(
+            hasCachedSchedule
+              ? 'Device is offline. Showing the latest cached timetable.'
+              : 'Device is offline and no cached timetable is available.'
+          );
         }
 
         return;
@@ -497,46 +515,70 @@ function AppContent() {
 
       try {
         setLoading(true);
-        setApiState('loading');
         setApiError(null);
+        setApiState('loading');
 
-        /*
-         * Do NOT put BSUIR directly in the frontend.
-         *
-         * The browser calls our Vercel endpoint:
-         *
-         * /api/bsuir/schedule
-         */
         const endpoint =
           `/api/bsuir/schedule?group=${encodeURIComponent(
-            group
+            normalizedGroup
           )}`;
 
-        const response =
-          await fetch(
-            endpoint,
-            {
-              method: 'GET',
-              headers: {
-                Accept:
-                  'application/json'
-              }
+        console.log(
+          '[Schedule] Fetching:',
+          endpoint
+        );
+
+        const res =
+          await fetch(endpoint, {
+            headers: {
+              Accept:
+                'application/json'
             }
-          );
+          });
 
         /*
-         * Try JSON regardless of HTTP status.
-         *
-         * This lets us understand useful backend responses
-         * instead of immediately throwing on 503.
+         * Parse JSON even for HTTP errors.
          */
         let json = null;
 
         try {
           json =
-            await response.json();
-        } catch {
+            await res.json();
+        } catch (jsonError) {
+          console.error(
+            '[Schedule] Invalid JSON response:',
+            jsonError
+          );
+
           json = null;
+        }
+
+        console.log(
+          '[Schedule] API response:',
+          json
+        );
+
+        if (!res.ok) {
+          const serverMessage =
+            json?.error ||
+            json?.message ||
+            `Schedule server returned HTTP ${res.status}.`;
+
+          throw new Error(
+            serverMessage
+          );
+        }
+
+        if (
+          !json ||
+          json.success !== true ||
+          !json.data
+        ) {
+          throw new Error(
+            json?.error ||
+            json?.message ||
+            'The schedule server returned no timetable data.'
+          );
         }
 
         if (cancelled) {
@@ -544,65 +586,51 @@ function AppContent() {
         }
 
         /*
-         * ======================================================
-         * HTTP ERROR
-         * ======================================================
+         * THIS is the important fix.
+         *
+         * If the API says:
+         *
+         * schedules: null
+         * nextSchedules: {...}
+         *
+         * normalizeScheduleData() moves nextSchedules
+         * into schedules.
          */
-        if (!response.ok) {
-          const message =
-            json?.error ||
-            json?.message ||
-            `Schedule server returned HTTP ${response.status}.`;
-
-          throw new Error(
-            message
-          );
-        }
-
-        /*
-         * ======================================================
-         * NORMALIZE BACKEND RESPONSE
-         * ======================================================
-         */
-        const normalized =
-          normalizeApiResponse(
-            json
-          );
-
-        if (!normalized.ok) {
-          throw new Error(
-            normalized.error
-          );
-        }
-
         const normalizedData =
-          normalized.data;
+          normalizeScheduleData(
+            json.data
+          );
 
         const status =
           getApiStatus(
-            normalized
+            json,
+            normalizedData
           );
 
+        const lessonCount =
+          countScheduleLessons(
+            normalizedData.schedules
+          );
+
+        console.log(
+          '[Schedule] Normalized data:',
+          normalizedData
+        );
+
+        console.log(
+          '[Schedule] Lesson count:',
+          lessonCount
+        );
+
         /*
-         * ======================================================
-         * KEEP THE DATA
-         * ======================================================
-         *
-         * Even cached data is useful.
-         *
-         * Even an empty timetable can be a valid response.
-         *
-         * We therefore do NOT reject the response merely because
-         * `schedules` is empty.
+         * Keep the data.
          */
         setScheduleData(
           normalizedData
         );
 
         /*
-         * ======================================================
-         * SAVE CACHE
-         * ======================================================
+         * Cache the complete normalized response.
          */
         try {
           localStorage.setItem(
@@ -619,29 +647,19 @@ function AppContent() {
         }
 
         /*
-         * ======================================================
-         * UPDATE TIMESTAMP
-         * ======================================================
-         *
-         * If we received actual schedule data, update the
-         * timestamp.
+         * Update timestamp whenever we received
+         * actual timetable entries.
          */
-        if (
-          hasScheduleData(
-            normalizedData
-          )
-        ) {
-          const timestamp =
+        if (lessonCount > 0) {
+          const now =
             new Date().toISOString();
 
-          setLastUpdated(
-            timestamp
-          );
+          setLastUpdated(now);
 
           try {
             localStorage.setItem(
               'sh_cache_timestamp',
-              timestamp
+              now
             );
           } catch (storageError) {
             console.error(
@@ -652,52 +670,53 @@ function AppContent() {
         }
 
         /*
-         * ======================================================
-         * STATUS
-         * ======================================================
+         * API state.
          */
         setApiState(
           status.state
         );
 
-        setApiError(
+        if (
+          status.state === 'live' &&
+          lessonCount > 0
+        ) {
+          setApiError(null);
+        } else if (
           status.message
-        );
+        ) {
+          setApiError(
+            status.message
+          );
+        } else {
+          setApiError(null);
+        }
       } catch (error) {
         if (cancelled) {
           return;
         }
 
         console.error(
-          'Failed to fetch schedule:',
+          'Failed to fetch BSUIR schedule:',
           error
         );
 
-        /*
-         * IMPORTANT:
-         *
-         * Never destroy a timetable that was already loaded.
-         *
-         * If BSUIR goes down for five minutes, the user should
-         * continue seeing their previous schedule.
-         */
+        setApiState('error');
+
         const hasExistingSchedule =
-          hasScheduleData(
-            scheduleData
+          countScheduleLessons(
+            scheduleData?.schedules
+          ) > 0;
+
+        if (hasExistingSchedule) {
+          setApiError(
+            'Unable to refresh the timetable. Showing the last saved timetable.'
           );
-
-        setApiState(
-          hasExistingSchedule
-            ? 'cached'
-            : 'error'
-        );
-
-        setApiError(
-          hasExistingSchedule
-            ? 'Unable to refresh the timetable. Showing the last saved timetable.'
-            : error?.message ||
-              'Unable to load the academic timetable.'
-        );
+        } else {
+          setApiError(
+            error?.message ||
+            'Unable to load the academic timetable.'
+          );
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -716,9 +735,7 @@ function AppContent() {
   ]);
 
   /*
-   * ============================================================
-   * ONBOARDING
-   * ============================================================
+   * Onboarding.
    */
   const handleOnboardingComplete = (
     newGroup,
@@ -738,18 +755,6 @@ function AppContent() {
         newSubgroup
       ) || 1;
 
-    /*
-     * If the user changed groups, the old schedule must not
-     * remain visible.
-     */
-    setScheduleData({
-      ...EMPTY_DATA
-    });
-
-    setLastUpdated(
-      null
-    );
-
     setGroup(
       normalizedGroup
     );
@@ -758,31 +763,27 @@ function AppContent() {
       normalizedSubgroup
     );
 
-    localStorage.setItem(
-      'sh_group',
-      normalizedGroup
-    );
-
-    localStorage.setItem(
-      'sh_subgroup',
-      String(
-        normalizedSubgroup
-      )
-    );
-
-    localStorage.setItem(
-      'sh_onboarded',
-      'true'
-    );
-
-    setIsOnboarded(
-      true
-    );
-
-    /*
-     * Clear the previous group's cache.
-     */
     try {
+      localStorage.setItem(
+        'sh_group',
+        normalizedGroup
+      );
+
+      localStorage.setItem(
+        'sh_subgroup',
+        String(
+          normalizedSubgroup
+        )
+      );
+
+      localStorage.setItem(
+        'sh_onboarded',
+        'true'
+      );
+
+      /*
+       * Clear previous group's cache.
+       */
       localStorage.removeItem(
         'sh_cached_schedule'
       );
@@ -792,32 +793,53 @@ function AppContent() {
       );
     } catch (error) {
       console.error(
-        'Failed to clear schedule cache:',
+        'Failed to save onboarding data:',
         error
       );
     }
+
+    setIsOnboarded(
+      true
+    );
+
+    setScheduleData({
+      ...EMPTY_DATA
+    });
+
+    setLastUpdated(
+      null
+    );
+
+    setApiState(
+      'loading'
+    );
+
+    setApiError(
+      null
+    );
   };
 
   /*
-   * ============================================================
-   * NAVIGATION
-   * ============================================================
+   * Navigation.
    */
-  const handleTabChange =
-    (tab) => {
-      triggerHaptic(
-        'light'
-      );
+  const handleTabChange = (
+    tab
+  ) => {
+    triggerHaptic(
+      'light'
+    );
 
-      setActiveTab(
-        tab
-      );
-    };
+    setSelectedLesson(
+      null
+    );
+
+    setActiveTab(
+      tab
+    );
+  };
 
   /*
-   * ============================================================
-   * ONBOARDING SCREEN
-   * ============================================================
+   * Onboarding screen.
    */
   if (!isOnboarded) {
     return (
@@ -832,11 +854,9 @@ function AppContent() {
   }
 
   /*
-   * ============================================================
-   * NORMALIZED DATA FOR VIEWS
-   * ============================================================
+   * Normalized consumer data.
    */
-  const studentGroup =
+  const student =
     scheduleData?.studentGroup ||
     null;
 
@@ -845,17 +865,10 @@ function AppContent() {
     null;
 
   const todaySchedule =
-    Array.isArray(
-      scheduleData?.todaySchedules
-    )
-      ? scheduleData.todaySchedules
-      : [];
+    getTodaySchedule(
+      scheduleData
+    );
 
-  /*
-   * ============================================================
-   * GREETING
-   * ============================================================
-   */
   const hour =
     new Date().getHours();
 
@@ -900,42 +913,31 @@ function AppContent() {
       '🌙';
   }
 
-  /*
-   * `studentGroup` from the backend is normally a string
-   * such as "150501", not an object.
-   */
   const displayName =
     user?.first_name ||
+    (
+      typeof student === 'object'
+        ? student?.name
+        : student
+    ) ||
     'Student';
 
   /*
-   * ============================================================
-   * HOME STATUS
-   * ============================================================
+   * HomeView status.
    */
-  let statusState =
-    'error';
-
-  if (isOffline) {
-    statusState =
-      'offline';
-  } else if (
-    apiState === 'live'
-  ) {
-    statusState =
-      'live';
-  } else if (
-    apiState === 'cached' ||
-    apiState === 'stale'
-  ) {
-    statusState =
-      'cached';
-  } else if (
-    apiState === 'fallback'
-  ) {
-    statusState =
-      'cached';
-  }
+  const statusState =
+    isOffline
+      ? 'offline'
+      : apiState === 'live'
+        ? 'live'
+        : apiState === 'cached' ||
+          apiState === 'stale'
+          ? 'cached'
+          : apiState === 'fallback'
+            ? 'error'
+            : apiState === 'empty'
+              ? 'error'
+              : 'error';
 
   const weekNumber =
     scheduleData?.currentWeek ||
@@ -952,9 +954,15 @@ function AppContent() {
         : 'text-[32px]';
 
   /*
-   * ============================================================
-   * SUBJECT DETAILS
-   * ============================================================
+   * Count actual timetable entries.
+   */
+  const lessonCount =
+    countScheduleLessons(
+      scheduleData?.schedules
+    );
+
+  /*
+   * Subject details.
    */
   if (selectedLesson) {
     return (
@@ -974,19 +982,15 @@ function AppContent() {
   }
 
   /*
-   * ============================================================
-   * MAIN APPLICATION
-   * ============================================================
+   * Main application.
    */
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 
-      {/* ======================================================
-          HEADER
-          ====================================================== */}
+      {/* Header */}
       <header className="mb-6">
         <h1
-          className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)] break-all`}
+          className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)] break-words`}
         >
           {greeting},{' '}
           {displayName}{' '}
@@ -994,23 +998,23 @@ function AppContent() {
         </h1>
 
         <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
-          Группа:{' '}
-          {group}
-          {' • '}
-          Подгруппа:{' '}
-          {subgroup}
-          {' • '}
-          Неделя:{' '}
+          Группа: {group} • Подгруппа:{' '}
+          {subgroup} • Неделя:{' '}
           {weekNumber}
         </p>
+
+        {lessonCount > 0 && (
+          <p className="mt-1 text-[11px] text-[var(--text-secondary)] opacity-70">
+            Загружено занятий:{' '}
+            {lessonCount}
+          </p>
+        )}
       </header>
 
-      {/* ======================================================
-          API STATUS
-          ====================================================== */}
+      {/* API / Offline Status */}
       {apiError && (
         <div className="mb-4 rounded-2xl p-3 bg-[#f59e0b]/10 border border-[#f59e0b]/20 flex items-center gap-3 text-xs text-[#f59e0b]">
-          <span className="shrink-0">
+          <span>
             {isOffline
               ? '📴'
               : apiState ===
@@ -1022,7 +1026,7 @@ function AppContent() {
                   : '⚠️'}
           </span>
 
-          <div className="min-w-0">
+          <div>
             <strong className="block font-bold">
               {isOffline
                 ? 'Offline Mode'
@@ -1032,7 +1036,13 @@ function AppContent() {
                   : apiState ===
                       'fallback'
                     ? 'BSUIR Data Unavailable'
-                    : 'Schedule Loading Error'}
+                    : apiState ===
+                        'empty'
+                      ? 'No Timetable Entries'
+                      : apiState ===
+                          'error'
+                        ? 'Schedule Loading Error'
+                        : 'Schedule Status'}
             </strong>
 
             <span className="text-[11px] opacity-80">
@@ -1042,143 +1052,176 @@ function AppContent() {
         </div>
       )}
 
-      {/* ======================================================
-          MAIN
-          ====================================================== */}
       <main>
 
         {/* HOME */}
         {activeTab ===
           'home' && (
-            <HomeView
-              scheduleData={{
-                student:
-                  studentGroup,
-                nextLesson,
-                todaySchedule
-              }}
-              status={
-                statusState
-              }
-              lastUpdatedTimestamp={
-                lastUpdated
-              }
-            />
-          )}
+          <HomeView
+            scheduleData={{
+              student,
+              nextLesson,
+              todaySchedule
+            }}
+            status={
+              statusState
+            }
+            lastUpdatedTimestamp={
+              lastUpdated
+            }
+          />
+        )}
 
         {/* SCHEDULE */}
         {activeTab ===
           'schedule' && (
-            <ScheduleView
-              scheduleData={
-                scheduleData
-              }
-              subgroup={
-                subgroup
-              }
-              loading={
-                loading
-              }
-              onLessonClick={
-                setSelectedLesson
-              }
-            />
-          )}
+          <ScheduleView
+            scheduleData={
+              scheduleData
+            }
+            subgroup={
+              subgroup
+            }
+            loading={
+              loading
+            }
+            onLessonClick={
+              setSelectedLesson
+            }
+          />
+        )}
 
         {/* TEACHERS */}
         {activeTab ===
           'teachers' && (
-            <TeachersView />
-          )}
+          <TeachersView />
+        )}
 
         {/* EXAMS */}
         {activeTab ===
           'exams' && (
-            <ExamsView />
-          )}
+          <ExamsView />
+        )}
 
         {/* SETTINGS */}
         {activeTab ===
           'settings' && (
-            <SettingsView
-              group={
+          <SettingsView
+            group={
+              group
+            }
+
+            setGroup={(
+              newGroup
+            ) => {
+              const normalizedGroup =
+                String(
+                  newGroup ||
+                    ''
+                ).trim();
+
+              /*
+               * Don't accidentally trigger
+               * an API request for an empty group.
+               */
+              if (
+                !normalizedGroup
+              ) {
+                return;
+              }
+
+              /*
+               * If the group actually changes,
+               * clear the old group's data.
+               */
+              if (
+                normalizedGroup !==
                 group
-              }
-              setGroup={
-                (newGroup) => {
-                  const normalizedGroup =
-                    String(
-                      newGroup ||
-                        ''
-                    ).trim();
+              ) {
+                setScheduleData({
+                  ...EMPTY_DATA
+                });
 
-                  /*
-                   * Changing the group means the old schedule
-                   * should not remain on screen.
-                   */
-                  if (
-                    normalizedGroup !==
-                    group
-                  ) {
-                    setScheduleData({
-                      ...EMPTY_DATA
-                    });
+                setLastUpdated(
+                  null
+                );
 
-                    setLastUpdated(
-                      null
-                    );
+                setApiError(
+                  null
+                );
 
-                    try {
-                      localStorage.removeItem(
-                        'sh_cached_schedule'
-                      );
+                setApiState(
+                  'loading'
+                );
 
-                      localStorage.removeItem(
-                        'sh_cache_timestamp'
-                      );
-                    } catch (
-                      error
-                    ) {
-                      console.error(
-                        'Failed to clear old schedule cache:',
-                        error
-                      );
-                    }
-                  }
-
-                  setGroup(
-                    normalizedGroup
+                try {
+                  localStorage.removeItem(
+                    'sh_cached_schedule'
                   );
 
-                  localStorage.setItem(
-                    'sh_group',
-                    normalizedGroup
+                  localStorage.removeItem(
+                    'sh_cache_timestamp'
+                  );
+                } catch (
+                  error
+                ) {
+                  console.error(
+                    'Failed to clear schedule cache:',
+                    error
                   );
                 }
               }
-              themeMode={
-                themeMode
-              }
-              setThemeMode={
-                (newTheme) => {
-                  setThemeMode(
-                    newTheme
-                  );
 
-                  localStorage.setItem(
-                    'sh_theme',
-                    newTheme
-                  );
-                }
+              setGroup(
+                normalizedGroup
+              );
+
+              try {
+                localStorage.setItem(
+                  'sh_group',
+                  normalizedGroup
+                );
+              } catch (
+                error
+              ) {
+                console.error(
+                  'Failed to save group:',
+                  error
+                );
               }
-            />
-          )}
+            }}
+
+            themeMode={
+              themeMode
+            }
+
+            setThemeMode={(
+              newTheme
+            ) => {
+              setThemeMode(
+                newTheme
+              );
+
+              try {
+                localStorage.setItem(
+                  'sh_theme',
+                  newTheme
+                );
+              } catch (
+                error
+              ) {
+                console.error(
+                  'Failed to save theme:',
+                  error
+                );
+              }
+            }}
+          />
+        )}
 
       </main>
 
-      {/* ======================================================
-          FLOATING NAVIGATION
-          ====================================================== */}
+      {/* Floating Navigation */}
       <FloatingNav
         activeTab={
           activeTab
@@ -1192,11 +1235,6 @@ function AppContent() {
   );
 }
 
-/*
- * ============================================================
- * APP ROOT
- * ============================================================
- */
 export default function App() {
   return (
     <LanguageProvider>
