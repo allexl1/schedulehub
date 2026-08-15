@@ -144,7 +144,7 @@ if (hour >= 6 && hour < 12) {
   
   const displayName = user?.first_name || student?.name || "Unknown Student";
   const statusState = isOffline ? 'offline' : apiError ? 'cached' : 'live';
-const weekNumber = student?.currentWeek || 1;
+const weekNumber = scheduleData?.currentWeek || 1;
 
 const greetingText = `${greeting}, ${displayName}`;
 
