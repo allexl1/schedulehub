@@ -236,7 +236,6 @@ if (selectedLesson) {
     <ScheduleView
   todaySchedule={todaySchedule}
   loading={loading}
-  isUsingCache={Boolean(apiError || isOffline)}
   onLessonClick={setSelectedLesson}
 />
   )}
