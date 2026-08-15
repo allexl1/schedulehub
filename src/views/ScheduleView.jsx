@@ -6,9 +6,15 @@ import {
   getMinutesUntilEnd,
   parseTimeRange
 } from '../utils/time';
+import {
+  resolveLessonsForDate,
+  resolveLessonsForWeekday,
+  normalizeLesson
+} from '../utils/scheduleResolver';
 
 export default function ScheduleView({
   scheduleData,
+  subgroup = 1,
   loading = false,
   onLessonClick
 }) {
@@ -99,13 +105,22 @@ useEffect(() => {
     }
   };
 
-  const isSelectedDayToday = selectedDay === todayDayName;
-  const dayPersonalEvents = personalEvents.filter((ev) => ev.day === selectedDay);
+const isSelectedDayToday = selectedDay === todayDayName;
 
-  // Combine schedule data according to data availability constraints
-  const unmergedSchedule = isSelectedDayToday
-    ? [...todaySchedule, ...dayPersonalEvents]
-    : [...dayPersonalEvents];
+const dayPersonalEvents = personalEvents.filter(
+  (ev) => ev.day === selectedDay
+);
+
+const weekdayLessons = resolveLessonsForWeekday(
+  schedules,
+  selectedDay,
+  subgroup
+).map(normalizeLesson);
+
+const unmergedSchedule = [
+  ...weekdayLessons,
+  ...dayPersonalEvents
+];
 
   // Immutable chronological sort
   const sortedSchedule = [...unmergedSchedule].sort((a, b) => {
