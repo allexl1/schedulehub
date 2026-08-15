@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import NextClassCard from '../components/home/NextClassCard';
 import StatusPill from '../components/home/StatusPill';
 import { formatCacheAge } from '../utils/formatCacheTime';
@@ -17,7 +17,15 @@ export default function HomeView({
   const { student, nextLesson, todaySchedule } = scheduleData || {};
   const { dictionary, language } = useLanguage();
 
-  const now = new Date();
+  const [now, setNow] = useState(() => new Date());
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    setNow(new Date());
+  }, 30000);
+
+  return () => clearInterval(interval);
+}, []);
   const localeCode = language === 'ru' ? 'ru-RU' : 'en-US';
 
   const todayDayName = now.toLocaleDateString(
