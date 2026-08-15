@@ -16,7 +16,7 @@ export default function ScheduleView({ todaySchedule = [], loading = false, onLe
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(new Date());
-    }, 30000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);
@@ -215,9 +215,8 @@ const startTime =
 const endTime =
   timeParts?.endTime || '10:20';
             return (
-            <button
+           <div
   key={item.id || idx}
-  type="button"
   onClick={() => onLessonClick?.(item)}
   className={`w-full p-4 flex items-center justify-between gap-3 transition-all text-left ${
     isPast ? 'opacity-35' : 'opacity-100'
@@ -239,8 +238,7 @@ const endTime =
                   <span className="block text-[10px] text-[var(--text-secondary)] font-medium">
                     {endTime}
                   </span>
-                </button>
-
+</div>
                 {/* Lesson Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
@@ -338,7 +336,7 @@ const endTime =
                     </div>
                   )}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
