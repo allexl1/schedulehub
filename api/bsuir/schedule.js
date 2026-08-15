@@ -64,7 +64,7 @@ async function fetchCurrentWeek() {
 
     const timeout = setTimeout(() => {
       controller.abort();
-    }, 4000);
+    }, 150);
 
     const res = await fetch(
       'https://iis.bsuir.by/api/v1/schedule/current-week',
@@ -118,7 +118,7 @@ export default async function handler(req, res) {
   // 1. Try BSUIR IIS API
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
     const bsuirRes = await fetch(`https://iis.bsuir.by/api/v1/schedule?studentGroup=${encodeURIComponent(group)}`, {
       signal: controller.signal,
