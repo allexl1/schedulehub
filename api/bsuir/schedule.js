@@ -58,6 +58,52 @@ const MOCK_SCHEDULE = {
   ]
 };
 
+async function fetchCurrentWeek() {
+  try {
+    const controller = new AbortController();
+
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 4000);
+
+    const res = await fetch(
+      'https://iis.bsuir.by/api/v1/schedule/current-week',
+      {
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/json, text/plain, */*'
+        }
+      }
+    );
+
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const value = await res.json();
+
+      return typeof value === 'number'
+        ? value
+        : parseInt(value, 10);
+    }
+
+    const text = await res.text();
+    const parsed = parseInt(text.trim(), 10);
+
+    return Number.isNaN(parsed)
+      ? null
+      : parsed;
+
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=86400');
 
@@ -106,6 +152,8 @@ export default async function handler(req, res) {
     rawSchedule = MOCK_SCHEDULE;
     isFallback = true;
   }
+  
+  const currentWeek = await fetchCurrentWeek();
 
   const todayLessons = rawSchedule.todaySchedules || [];
   const nextLesson = todayLessons.length > 0 ? {
@@ -127,6 +175,7 @@ export default async function handler(req, res) {
       schedules: rawSchedule.schedules || {},
       todaySchedules: todayLessons,
       exams: rawSchedule.exams || [],
+      currentWeek: currentWeek || 1,
       nextLesson: nextLesson
     }
   });
