@@ -60,21 +60,14 @@ const MOCK_SCHEDULE = {
 
 async function fetchCurrentWeek() {
   try {
-    const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 15000);
-
-    const res = await fetch(
-      'https://iis.bsuir.by/api/v1/schedule/current-week',
-      {
-        signal: controller.signal,
-        headers: {
-          Accept: 'application/json, text/plain, */*'
-        }
-      }
-    );
+    const bsuirRes = await fetch(
+  `https://iis.bsuir.by/api/v1/schedule?studentGroup=${group}`,
+  {
+    headers: {
+      'Accept': 'application/json'
+    }
+  }
+);
 
     clearTimeout(timeout);
 
