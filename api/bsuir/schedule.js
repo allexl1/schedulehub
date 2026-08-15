@@ -115,8 +115,10 @@ if (bsuirRes.ok) {
   rawSchedule = await bsuirRes.json();
 } else {
   const errorText = await bsuirRes.text();
-  debugMessage =
-    `BSUIR HTTP ${bsuirRes.status}: ${errorText}`;
+  debugMessage = {
+  status: bsuirRes.status,
+  body: errorText
+};
 }
   } catch (err) {
     debugMessage = `BSUIR connection failed: ${err.message}`;
