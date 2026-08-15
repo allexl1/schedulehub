@@ -120,7 +120,7 @@ export default async function handler(req, res) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 4000);
 
-    const bsuirRes = await fetch(`https://iis.bsuir.by/api/v1/schedule?studentGroup=${group}`, {
+    const bsuirRes = await fetch(`https://iis.bsuir.by/api/v1/schedule?studentGroup=${encodeURIComponent(group)}`, {
       signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -131,12 +131,13 @@ export default async function handler(req, res) {
     });
     clearTimeout(timeout);
 
-    if (bsuirRes.ok) {
-      rawSchedule = await bsuirRes.json();
-      await setRedisCache(cacheKey, rawSchedule, 86400);
-    } else {
-      debugMessage = `BSUIR server responded with HTTP ${bsuirRes.status}`;
-    }
+if (bsuirRes.ok) {
+  rawSchedule = await bsuirRes.json();
+} else {
+  const errorText = await bsuirRes.text();
+  debugMessage =
+    `BSUIR HTTP ${bsuirRes.status}: ${errorText}`;
+}
   } catch (err) {
     debugMessage = `BSUIR connection failed: ${err.message}`;
   }
