@@ -1564,4 +1564,4 @@ export default function App() {
       <AppContent />
     </LanguageProvider>
   );
-}
+} 
