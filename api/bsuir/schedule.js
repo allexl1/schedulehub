@@ -235,6 +235,15 @@ export default async function handler(req, res) {
       } else {
         rawSchedule = await bsuirResponse.json();
 
+debugMessage = {
+  source: 'bsuir',
+  rawKeys:
+    rawSchedule && typeof rawSchedule === 'object'
+      ? Object.keys(rawSchedule)
+      : [],
+  rawSample: rawSchedule
+};
+
         /*
          * Only cache a response that actually contains
          * schedule data.
