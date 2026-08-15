@@ -217,8 +217,9 @@ if (selectedLesson) {
   )}
 
   {activeTab === 'schedule' && (
-  <ScheduleView
+<ScheduleView
   scheduleData={scheduleData}
+  subgroup={subgroup}
   loading={loading}
 />
   )}
