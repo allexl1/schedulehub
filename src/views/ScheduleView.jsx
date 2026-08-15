@@ -7,7 +7,15 @@ import {
   parseTimeRange
 } from '../utils/time';
 
-export default function ScheduleView({ todaySchedule = [], loading = false, onLessonClick }) {
+export default function ScheduleView({
+  scheduleData,
+  loading = false,
+  onLessonClick
+}) {
+  const schedules = scheduleData?.schedules || {};
+const exams = scheduleData?.exams || [];
+const currentWeek = scheduleData?.currentWeek || 1;
+const studentGroup = scheduleData?.studentGroup;
   const [scheduleMode, setScheduleMode] = useState(() => {
   return localStorage.getItem('sh_schedule_mode') || 'weekday';
 });
