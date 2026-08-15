@@ -1,22 +1,11 @@
-// Shared resolver for turning a raw BSUIR "schedules" object into
-// lessons that actually apply to a given day, week, and subgroup.
+// Shared BSUIR schedule resolver.
 //
-// Used by:
-//   - api/bsuir/schedule.js
-//   - src/views/ScheduleView.jsx
+// BSUIR's raw schedule uses Russian weekday names:
+// Понедельник, Вторник, Среда, Четверг, Пятница, Суббота.
 //
-// Keeping this logic in one place ensures that the frontend and
-// backend agree about which lessons belong to a particular day.
+// The UI may use English abbreviations such as Mon/Tue/Wed.
+// This file normalizes both sides so the API and UI always agree.
 
-/**
- * BSUIR weekday names.
- *
- * JavaScript Date uses:
- *   0 = Sunday
- *   1 = Monday
- *   ...
- *   6 = Saturday
- */
 const RU_DAY_NAMES = [
   'Понедельник',
   'Вторник',
@@ -27,210 +16,119 @@ const RU_DAY_NAMES = [
   'Воскресенье'
 ];
 
-/**
- * Convert a JavaScript Date into the corresponding
- * Russian BSUIR weekday name.
- */
-function weekdayNameForDate(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return null;
-  }
+const DAY_ALIASES = {
+  Mon: 'Понедельник',
+  Monday: 'Понедельник',
+  Понедельник: 'Понедельник',
 
+  Tue: 'Вторник',
+  Tuesday: 'Вторник',
+  Вторник: 'Вторник',
+
+  Wed: 'Среда',
+  Wednesday: 'Среда',
+  Среда: 'Среда',
+
+  Thu: 'Четверг',
+  Thursday: 'Четверг',
+  Четверг: 'Четверг',
+
+  Fri: 'Пятница',
+  Friday: 'Пятница',
+  Пятница: 'Пятница',
+
+  Sat: 'Суббота',
+  Saturday: 'Суббота',
+  Суббота: 'Суббота',
+
+  Sun: 'Воскресенье',
+  Sunday: 'Воскресенье',
+  Воскресенье: 'Воскресенье'
+};
+
+function normalizeDayName(dayName) {
+  if (!dayName) return null;
+
+  return DAY_ALIASES[dayName] || dayName;
+}
+
+function weekdayNameForDate(date) {
   const jsDay = date.getDay();
 
-  // Convert:
-  // Sunday 0 -> index 6
-  // Monday 1 -> index 0
+  // JS:
+  // 0 = Sunday
+  // 1 = Monday
   // ...
-  // Saturday 6 -> index 5
+  // 6 = Saturday
+
   const index = jsDay === 0 ? 6 : jsDay - 1;
 
   return RU_DAY_NAMES[index];
 }
 
-/**
- * Convert "HH:MM" into minutes since midnight.
- *
- * Examples:
- *   "08:30" -> 510
- *   "13:25" -> 805
- *   "18:30" -> 1110
- */
-function timeStrToMinutes(value) {
-  if (!value || typeof value !== 'string') {
-    return 0;
+function timeStrToMinutes(time) {
+  if (!time || typeof time !== 'string') {
+    return Number.MAX_SAFE_INTEGER;
   }
 
-  const parts = value.split(':');
+  const parts = time.split(':').map(Number);
 
-  const hours = Number(parts[0]);
-  const minutes = Number(parts[1]);
-
-  if (
-    !Number.isFinite(hours) ||
-    !Number.isFinite(minutes)
-  ) {
-    return 0;
-  }
+  const hours = Number.isFinite(parts[0]) ? parts[0] : 0;
+  const minutes = Number.isFinite(parts[1]) ? parts[1] : 0;
 
   return hours * 60 + minutes;
 }
 
-/**
- * Determine whether a lesson applies to a particular academic week.
- *
- * BSUIR lesson data normally contains weekNumber as an array,
- * for example:
- *
- *   [1]
- *   [2]
- *   [1, 3]
- *
- * Some lessons may have no weekNumber information. In that case
- * we treat them as applicable to every week.
- */
 function lessonMatchesWeek(lesson, currentWeek) {
-  const weeks = lesson?.weekNumber;
+  if (!lesson) return false;
 
-  // No week restriction.
+  const weeks = lesson.weekNumber;
+
+  // No week restriction = every week.
   if (
     weeks === undefined ||
     weeks === null ||
-    weeks === ''
+    (Array.isArray(weeks) && weeks.length === 0)
   ) {
     return true;
   }
 
-  // Empty array = no week restriction.
-  if (Array.isArray(weeks) && weeks.length === 0) {
+  const normalizedCurrentWeek = Number(currentWeek);
+
+  if (!Number.isFinite(normalizedCurrentWeek)) {
     return true;
   }
 
-  // Occasionally API data may contain a single number.
-  if (typeof weeks === 'number') {
-    return weeks === currentWeek;
-  }
+  const weekArray = Array.isArray(weeks)
+    ? weeks
+    : [weeks];
 
-  // Occasionally API data may contain a string.
-  if (typeof weeks === 'string') {
-    const parsed = Number(weeks);
-
-    if (Number.isFinite(parsed)) {
-      return parsed === currentWeek;
-    }
-
-    return true;
-  }
-
-  if (Array.isArray(weeks)) {
-    return weeks.some((week) => {
-      const parsed = Number(week);
-
-      return (
-        Number.isFinite(parsed) &&
-        parsed === Number(currentWeek)
-      );
-    });
-  }
-
-  return true;
-}
-
-/**
- * Determine whether a lesson applies to a subgroup.
- *
- * subgroup = 0 means:
- *   do not restrict by subgroup.
- *
- * numSubgroup = 0 / missing means:
- *   lesson applies to everyone.
- */
-function lessonMatchesSubgroup(lesson, subgroup) {
-  const lessonSubgroup = Number(
-    lesson?.numSubgroup || 0
-  );
-
-  const selectedSubgroup = Number(
-    subgroup || 0
-  );
-
-  // Lesson is not subgroup-specific.
-  if (
-    !Number.isFinite(lessonSubgroup) ||
-    lessonSubgroup === 0
-  ) {
-    return true;
-  }
-
-  // Caller did not specify a subgroup.
-  if (
-    !Number.isFinite(selectedSubgroup) ||
-    selectedSubgroup === 0
-  ) {
-    return true;
-  }
-
-  return lessonSubgroup === selectedSubgroup;
-}
-
-/**
- * Resolve lessons for an exact calendar date.
- *
- * This is the main function used by the API.
- *
- * Example:
- *
- * resolveLessonsForDate(
- *   schedules,
- *   new Date(),
- *   currentWeek,
- *   1
- * )
- */
-function resolveLessonsForDate(
-  schedules,
-  date,
-  currentWeek = 1,
-  subgroup = 0
-) {
-  if (!schedules || typeof schedules !== 'object') {
-    return [];
-  }
-
-  const dayName = weekdayNameForDate(date);
-
-  if (!dayName) {
-    return [];
-  }
-
-  const dayLessons = Array.isArray(schedules[dayName])
-    ? schedules[dayName]
-    : [];
-
-  const filtered = dayLessons.filter((lesson) => {
-    if (!lesson || typeof lesson !== 'object') {
-      return false;
-    }
-
-    const weekMatches =
-      lessonMatchesWeek(
-        lesson,
-        currentWeek
-      );
-
-    const subgroupMatches =
-      lessonMatchesSubgroup(
-        lesson,
-        subgroup
-      );
-
-    return (
-      weekMatches &&
-      subgroupMatches
-    );
+  return weekArray.some((week) => {
+    return Number(week) === normalizedCurrentWeek;
   });
+}
 
-  return filtered.sort((a, b) => {
+function lessonMatchesSubgroup(lesson, subgroup) {
+  if (!lesson) return false;
+
+  const requestedSubgroup = Number(subgroup) || 0;
+  const lessonSubgroup = Number(lesson.numSubgroup) || 0;
+
+  // numSubgroup 0 means the lesson is shared by all subgroups.
+  if (lessonSubgroup === 0) {
+    return true;
+  }
+
+  // If caller doesn't know a subgroup, don't hide subgroup-specific data.
+  if (requestedSubgroup === 0) {
+    return true;
+  }
+
+  return lessonSubgroup === requestedSubgroup;
+}
+
+function sortLessons(lessons) {
+  return [...lessons].sort((a, b) => {
     return (
       timeStrToMinutes(a.startLessonTime) -
       timeStrToMinutes(b.startLessonTime)
@@ -239,20 +137,49 @@ function resolveLessonsForDate(
 }
 
 /**
- * Resolve lessons for a weekday.
+ * Resolve lessons for an actual calendar date.
+ */
+function resolveLessonsForDate(
+  schedules,
+  date,
+  currentWeek,
+  subgroup = 0
+) {
+  if (!schedules || typeof schedules !== 'object') {
+    return [];
+  }
+
+  const dayName = weekdayNameForDate(date);
+  const normalizedDayName = normalizeDayName(dayName);
+
+  const dayLessons =
+    schedules[normalizedDayName] ||
+    schedules[dayName] ||
+    [];
+
+  if (!Array.isArray(dayLessons)) {
+    return [];
+  }
+
+  const filtered = dayLessons.filter((lesson) => {
+    return (
+      lessonMatchesWeek(lesson, currentWeek) &&
+      lessonMatchesSubgroup(lesson, subgroup)
+    );
+  });
+
+  return sortLessons(filtered);
+}
+
+/**
+ * Resolve all recurring lessons for a selected weekday.
  *
- * Unlike resolveLessonsForDate(), this function does not select
- * one particular academic week.
- *
- * It groups lessons by week so the frontend can display the
- * recurring timetable correctly.
- *
- * Result example:
- *
+ * Returns:
  * {
- *   1: [lesson, lesson],
- *   2: [lesson],
- *   3: [lesson]
+ *   "1": [...],
+ *   "2": [...],
+ *   "3": [...],
+ *   "4": [...]
  * }
  */
 function resolveLessonsForWeekday(
@@ -264,47 +191,29 @@ function resolveLessonsForWeekday(
     return {};
   }
 
-  const dayLessons = Array.isArray(schedules[dayName])
-    ? schedules[dayName]
-    : [];
+  const normalizedDayName = normalizeDayName(dayName);
+
+  const dayLessons =
+    schedules[normalizedDayName] ||
+    schedules[dayName] ||
+    [];
+
+  if (!Array.isArray(dayLessons)) {
+    return {};
+  }
 
   const filtered = dayLessons.filter((lesson) => {
-    if (!lesson || typeof lesson !== 'object') {
-      return false;
-    }
-
-    return lessonMatchesSubgroup(
-      lesson,
-      subgroup
-    );
+    return lessonMatchesSubgroup(lesson, subgroup);
   });
 
   const grouped = {};
 
   for (const lesson of filtered) {
-    let weeks = lesson.weekNumber;
-
-    /*
-     * A lesson without week information is treated as
-     * applicable to every week.
-     *
-     * We use the key "all" for those lessons rather than
-     * pretending they belong to week 1.
-     */
-    if (
-      weeks === undefined ||
-      weeks === null ||
-      weeks === ''
-    ) {
-      weeks = ['all'];
-    } else if (
-      Array.isArray(weeks) &&
-      weeks.length === 0
-    ) {
-      weeks = ['all'];
-    } else if (!Array.isArray(weeks)) {
-      weeks = [weeks];
-    }
+    const weeks =
+      Array.isArray(lesson.weekNumber) &&
+      lesson.weekNumber.length > 0
+        ? lesson.weekNumber
+        : ['all'];
 
     for (const week of weeks) {
       const key = String(week);
@@ -317,33 +226,18 @@ function resolveLessonsForWeekday(
     }
   }
 
-  /*
-   * Sort every week chronologically.
-   */
-  for (const weekKey of Object.keys(grouped)) {
-    grouped[weekKey].sort((a, b) => {
-      return (
-        timeStrToMinutes(
-          a.startLessonTime
-        ) -
-        timeStrToMinutes(
-          b.startLessonTime
-        )
-      );
-    });
+  for (const key of Object.keys(grouped)) {
+    grouped[key] = sortLessons(grouped[key]);
   }
 
   return grouped;
 }
 
 /**
- * Create the normalized lesson format used by ScheduleView.
- *
- * Raw BSUIR lesson objects are fairly verbose.
- * The UI only needs a consistent smaller object.
+ * Convert raw BSUIR lesson into the shape used by the UI.
  */
 function normalizeLesson(lesson) {
-  if (!lesson || typeof lesson !== 'object') {
+  if (!lesson) {
     return {
       id: `unknown-${Date.now()}`,
       subject: 'Lesson',
@@ -360,64 +254,31 @@ function normalizeLesson(lesson) {
     };
   }
 
-  /*
-   * Teachers / employees
-   */
-  const employees = Array.isArray(
-    lesson.employees
-  )
+  const employees = Array.isArray(lesson.employees)
     ? lesson.employees
     : [];
 
-  const teacherNames = [];
+  const teacherNames = employees
+    .map((employee) => {
+      if (!employee) return '';
 
-  for (const employee of employees) {
-    if (!employee || typeof employee !== 'object') {
-      continue;
-    }
+      const lastName = employee.lastName || '';
+      const firstName = employee.firstName || '';
+      const middleName = employee.middleName || '';
 
-    const lastName =
-      employee.lastName ||
-      '';
+      const firstInitial = firstName
+        ? `${firstName.charAt(0)}.`
+        : '';
 
-    const firstName =
-      employee.firstName ||
-      '';
+      const middleInitial = middleName
+        ? ` ${middleName.charAt(0)}.`
+        : '';
 
-    const firstInitial =
-      firstName.charAt(0);
+      return `${lastName} ${firstInitial}${middleInitial}`.trim();
+    })
+    .filter(Boolean);
 
-    let teacherName = '';
-
-    if (lastName && firstInitial) {
-      teacherName =
-        `${lastName} ${firstInitial}.`;
-    } else if (lastName) {
-      teacherName = lastName;
-    } else if (firstName) {
-      teacherName = firstName;
-    }
-
-    if (teacherName) {
-      teacherNames.push(
-        teacherName
-      );
-    }
-  }
-
-  /*
-   * Remove duplicate teacher names.
-   */
-  const uniqueTeacherNames = [
-    ...new Set(teacherNames)
-  ];
-
-  /*
-   * Auditories / rooms
-   */
-  const auditories = Array.isArray(
-    lesson.auditories
-  )
+  const auditories = Array.isArray(lesson.auditories)
     ? lesson.auditories
     : [];
 
@@ -425,20 +286,16 @@ function normalizeLesson(lesson) {
     auditories.length > 0
       ? auditories
           .map((auditory) => {
-            if (
-              typeof auditory === 'string'
-            ) {
+            if (typeof auditory === 'string') {
               return auditory;
             }
 
-            if (
-              auditory &&
-              typeof auditory === 'object'
-            ) {
+            if (auditory && typeof auditory === 'object') {
               return (
-                auditory.auditory ||
+                auditory.auditoryName ||
                 auditory.name ||
                 auditory.number ||
+                auditory.room ||
                 ''
               );
             }
@@ -449,43 +306,27 @@ function normalizeLesson(lesson) {
           .join(', ')
       : 'N/A';
 
-  /*
-   * Week information.
-   */
-  let weekNumber = lesson.weekNumber;
+  const startTime = lesson.startLessonTime || '--:--';
+  const endTime = lesson.endLessonTime || '--:--';
 
-  if (!Array.isArray(weekNumber)) {
-    if (
-      weekNumber === undefined ||
-      weekNumber === null ||
-      weekNumber === ''
-    ) {
-      weekNumber = [];
-    } else {
-      weekNumber = [weekNumber];
-    }
-  }
-
-  /*
-   * Stable-ish ID.
-   *
-   * Prefer an API-provided ID if available.
-   */
-  const generatedId = [
-    lesson.subject || 'lesson',
-    lesson.startLessonTime || '',
-    lesson.endLessonTime || '',
-    weekNumber.join('-'),
-    lesson.numSubgroup || 0
-  ]
-    .join('-')
-    .replace(/\s+/g, '-');
+  const weekNumber =
+    Array.isArray(lesson.weekNumber)
+      ? lesson.weekNumber
+      : lesson.weekNumber !== undefined &&
+          lesson.weekNumber !== null
+        ? [lesson.weekNumber]
+        : [];
 
   return {
     id:
       lesson.id ||
-      lesson.lessonId ||
-      generatedId,
+      [
+        lesson.subject || 'lesson',
+        startTime,
+        endTime,
+        weekNumber.join('-'),
+        lesson.numSubgroup || 0
+      ].join('-'),
 
     subject:
       lesson.subjectFullName ||
@@ -493,8 +334,7 @@ function normalizeLesson(lesson) {
       'Lesson',
 
     subjectShort:
-      lesson.subject ||
-      '',
+      lesson.subject || '',
 
     type:
       lesson.lessonTypeAbbrev ||
@@ -504,40 +344,35 @@ function normalizeLesson(lesson) {
     room,
 
     teacher:
-      uniqueTeacherNames.length > 0
-        ? uniqueTeacherNames.join(', ')
+      teacherNames.length > 0
+        ? teacherNames.join(', ')
         : 'Faculty',
 
     time:
-      `${lesson.startLessonTime || '--:--'} - ${
-        lesson.endLessonTime || '--:--'
-      }`,
+      `${startTime} - ${endTime}`,
 
-    startLessonTime:
-      lesson.startLessonTime ||
-      null,
-
-    endLessonTime:
-      lesson.endLessonTime ||
-      null,
+    startLessonTime: lesson.startLessonTime || null,
+    endLessonTime: lesson.endLessonTime || null,
 
     weekNumber,
 
     numSubgroup:
-      Number(lesson.numSubgroup || 0),
+      Number(lesson.numSubgroup) || 0,
 
     note:
       lesson.note ||
-      null
+      null,
+
+    // Keep the original object available if a detail screen
+    // eventually needs fields not exposed above.
+    rawLesson: lesson
   };
 }
 
 export {
   RU_DAY_NAMES,
+  normalizeDayName,
   weekdayNameForDate,
-  timeStrToMinutes,
-  lessonMatchesWeek,
-  lessonMatchesSubgroup,
   resolveLessonsForDate,
   resolveLessonsForWeekday,
   normalizeLesson
