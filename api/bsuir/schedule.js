@@ -97,32 +97,21 @@ export default async function handler(req, res) {
 
   // 1. Try BSUIR IIS API
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+  const bsuirRes = await fetch(
+    `https://iis.bsuir.by/api/v1/schedule?studentGroup=${group}`
+  );
 
-    const bsuirRes = await fetch(`https://iis.bsuir.by/api/v1/schedule?studentGroup=${encodeURIComponent(group)}`, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'ru,en;q=0.9',
-        'Referer': 'https://iis.bsuir.by/'
-      }
-    });
-    clearTimeout(timeout);
-
-if (bsuirRes.ok) {
-  rawSchedule = await bsuirRes.json();
-} else {
-  const errorText = await bsuirRes.text();
-  debugMessage = {
-  status: bsuirRes.status,
-  body: errorText
-};
-}
-  } catch (err) {
-    debugMessage = `BSUIR connection failed: ${err.message}`;
+  if (bsuirRes.ok) {
+    rawSchedule = await bsuirRes.json();
+  } else {
+    debugMessage = {
+      status: bsuirRes.status,
+      body: await bsuirRes.text()
+    };
   }
+} catch (err) {
+  debugMessage = err.message;
+}
 
   // 2. Try Upstash Redis Cache
   if (!rawSchedule) {
