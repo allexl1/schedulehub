@@ -336,7 +336,7 @@ const endTime =
                     </div>
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
