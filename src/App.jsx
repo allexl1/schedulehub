@@ -11,26 +11,10 @@ import { useOffline } from './hooks/useOffline';
 import SubjectDetailsView from './views/SubjectDetailsView';
 import { LanguageProvider } from './context/LanguageContext';
 
-const FALLBACK_DATA = {
-  student: { name: "Alex", group: "150501", subgroup: 1, currentWeek: 2 },
-  nextLesson: {
-    subject: "Object-Oriented Programming",
-    type: "Lecture",
-    time: "09:00 - 10:20",
-    room: "201-4",
-    teacher: "A. A. Ivanov",
-    startsInMinutes: 15
-  },
-  todaySchedule: [
-    {
-      id: 1,
-      subject: "Object-Oriented Programming",
-      type: "Lecture",
-      time: "09:00 - 10:20",
-      room: "201-4",
-      teacher: "A. A. Ivanov"
-    }
-  ]
+const EMPTY_DATA = {
+  student: null,
+  nextLesson: null,
+  todaySchedule: []
 };
 
 function AppContent() {
@@ -57,7 +41,7 @@ function AppContent() {
     } catch (e) {
       console.error('Failed to load cached schedule:', e);
     }
-    return FALLBACK_DATA;
+    return EMPTY_DATA;
   });
 
   const [lastUpdated, setLastUpdated] = useState(() => {
@@ -137,12 +121,12 @@ function AppContent() {
   );
 }
 
-  // Safe Property Extraction with Fallbacks
-  const student = scheduleData?.student || FALLBACK_DATA.student;
-  const nextLesson = scheduleData?.nextLesson || FALLBACK_DATA.nextLesson;
+  // Safe Property Extraction 
+  const student = scheduleData?.student;
+  const nextLesson = scheduleData?.nextLesson;
   const todaySchedule = Array.isArray(scheduleData?.todaySchedule)
-    ? scheduleData.todaySchedule
-    : FALLBACK_DATA.todaySchedule;
+  ? scheduleData.todaySchedule
+  : [];
 
 const hour = new Date().getHours();
 
@@ -158,7 +142,7 @@ if (hour >= 6 && hour < 12) {
   greeting = 'Доброй ночи';
 }
   
-  const displayName = user?.first_name || student?.name || "Student";
+  const displayName = user?.first_name || student?.name || "Unknown Student";
   const statusState = isOffline ? 'offline' : apiError ? 'cached' : 'live';
 const weekNumber = student?.currentWeek || 1;
 
