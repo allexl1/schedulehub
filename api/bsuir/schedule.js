@@ -64,7 +64,7 @@ async function fetchCurrentWeek() {
 
     const timeout = setTimeout(() => {
       controller.abort();
-    }, 150);
+    }, 15000);
 
     const res = await fetch(
       'https://iis.bsuir.by/api/v1/schedule/current-week',
