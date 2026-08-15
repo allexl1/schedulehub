@@ -1,38 +1,56 @@
 // src/utils/scheduleResolver.js
 //
-// Shared BSUIR schedule resolver.
+// Schedule resolver for ScheduleHub.
 //
-// IMPORTANT:
-// BSUIR timetable data is not simply a recurring Mon/Tue/Wed schedule.
-// A lesson can be constrained by:
-//   - weekday
-//   - academic week number
-//   - startLessonDate / endLessonDate
-//   - subgroup
+// PRIMARY DATA MODEL
+// ------------------
+// The frontend schedule is now date-based:
 //
-// The API can also return:
-//   schedules: null
-//   nextSchedules: { ... }
+// {
+//   "2026-09-01": [lesson, lesson],
+//   "2026-09-02": [lesson],
+//   "2026-09-03": [lesson, lesson],
+//   ...
+// }
 //
-// Therefore the resolver works with BOTH schedules and nextSchedules
-// and resolves the timetable for an ACTUAL CALENDAR DATE.
+// The resolver also accepts the raw BSUIR format:
 //
-// Main flow:
+// {
+//   schedules: {
+//     "Понедельник": [...],
+//     "Вторник": [...]
+//   },
+//   nextSchedules: {
+//     "Понедельник": [...],
+//     "Вторник": [...]
+//   }
+// }
 //
-//   raw API data
+// IMPORTANT
+// ---------
+// Calendar date is the source of truth.
+// We do NOT blindly use the current API week for a selected date.
+// The academic week is calculated from the term start date whenever
+// possible, then weekNumber/date-range/subgroup are applied.
+//
+// This prevents the old bug where:
+//
+//   date-keyed schedules
 //        ↓
-//   getScheduleSource()
+//   resolver looks for "Четверг"
 //        ↓
-//   resolveLessonsForDate()
-//        ↓
-//   weekday + date range + week + subgroup
-//        ↓
-//   normalized + sorted lessons
+//   finds nothing
 //
-// This is intentionally date-first. The UI should ask:
-// "What classes exist on 2026-09-10?"
-// rather than:
-// "What classes normally happen on Thursday?"
+// The resolver now checks:
+//
+//   1. exact YYYY-MM-DD key
+//   2. raw weekday key
+//   3. nextSchedules weekday key
+//   4. explicit lesson date range
+//   5. academic week
+//   6. subgroup
+//   7. time sorting
+//
 
 const RU_DAY_NAMES = [
   'Понедельник',
@@ -75,7 +93,7 @@ const DAY_ALIASES = {
 };
 
 /* -------------------------------------------------------------------------- */
-/* Basic normalization                                                        */
+/* Basic helpers                                                              */
 /* -------------------------------------------------------------------------- */
 
 function normalizeDayName(dayName) {
@@ -83,23 +101,32 @@ function normalizeDayName(dayName) {
     return null;
   }
 
-  return DAY_ALIASES[dayName] || dayName;
+  const value = String(dayName).trim();
+
+  return DAY_ALIASES[value] || value;
+}
+
+function isDateKey(value) {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value.trim())
+  );
 }
 
 function weekdayNameForDate(date) {
-  const normalizedDate = toDateOnly(date);
+  const normalized = toDateOnly(date);
 
-  if (!normalizedDate) {
+  if (!normalized) {
     return null;
   }
 
-  const jsDay = normalizedDate.getDay();
+  const jsDay = normalized.getDay();
 
   // JS:
-  // 0 = Sunday
-  // 1 = Monday
+  // 0 Sunday
+  // 1 Monday
   // ...
-  // 6 = Saturday
+  // 6 Saturday
 
   const index = jsDay === 0 ? 6 : jsDay - 1;
 
@@ -110,13 +137,6 @@ function weekdayNameForDate(date) {
 /* Date helpers                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Convert a value into a local calendar date with time removed.
- *
- * IMPORTANT:
- * We intentionally avoid new Date('YYYY-MM-DD') because JavaScript treats
- * that format as UTC, which can shift the date in some timezones.
- */
 function toDateOnly(value) {
   if (!value) {
     return null;
@@ -157,9 +177,15 @@ function toDateOnly(value) {
         day
       );
 
-      return Number.isNaN(result.getTime())
-        ? null
-        : result;
+      if (
+        result.getFullYear() !== year ||
+        result.getMonth() !== month - 1 ||
+        result.getDate() !== day
+      ) {
+        return null;
+      }
+
+      return result;
     }
 
     // DD.MM.YYYY
@@ -178,12 +204,18 @@ function toDateOnly(value) {
         day
       );
 
-      return Number.isNaN(result.getTime())
-        ? null
-        : result;
+      if (
+        result.getFullYear() !== year ||
+        result.getMonth() !== month - 1 ||
+        result.getDate() !== day
+      ) {
+        return null;
+      }
+
+      return result;
     }
 
-    // ISO datetime or another parseable value.
+    // ISO datetime / other parseable date.
     const parsed = new Date(trimmed);
 
     if (!Number.isNaN(parsed.getTime())) {
@@ -212,28 +244,6 @@ function toDateOnly(value) {
   return null;
 }
 
-function startOfDay(date) {
-  return toDateOnly(date);
-}
-
-function endOfDay(date) {
-  const normalized = toDateOnly(date);
-
-  if (!normalized) {
-    return null;
-  }
-
-  return new Date(
-    normalized.getFullYear(),
-    normalized.getMonth(),
-    normalized.getDate(),
-    23,
-    59,
-    59,
-    999
-  );
-}
-
 function dateKey(date) {
   const normalized = toDateOnly(date);
 
@@ -242,25 +252,16 @@ function dateKey(date) {
   }
 
   const year = normalized.getFullYear();
+
   const month = String(
     normalized.getMonth() + 1
   ).padStart(2, '0');
+
   const day = String(
     normalized.getDate()
   ).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
-}
-
-function compareDates(a, b) {
-  const dateA = toDateOnly(a);
-  const dateB = toDateOnly(b);
-
-  if (!dateA || !dateB) {
-    return null;
-  }
-
-  return dateA.getTime() - dateB.getTime();
 }
 
 function dateIsBetween(
@@ -294,12 +295,98 @@ function dateIsBetween(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Academic term helpers                                                      */
+/* -------------------------------------------------------------------------- */
+
+function getTermStartDate(scheduleData) {
+  if (!scheduleData) {
+    return null;
+  }
+
+  const candidates = [
+    scheduleData.startDate,
+    scheduleData.termStartDate,
+    scheduleData.currentTerm?.startDate,
+    scheduleData.currentTerm?.start,
+    scheduleData.data?.startDate,
+    scheduleData.data?.termStartDate,
+    scheduleData.data?.currentTerm?.startDate
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = toDateOnly(candidate);
+
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function getTermEndDate(scheduleData) {
+  if (!scheduleData) {
+    return null;
+  }
+
+  const candidates = [
+    scheduleData.endDate,
+    scheduleData.termEndDate,
+    scheduleData.currentTerm?.endDate,
+    scheduleData.currentTerm?.end,
+    scheduleData.data?.endDate,
+    scheduleData.data?.termEndDate,
+    scheduleData.data?.currentTerm?.endDate
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = toDateOnly(candidate);
+
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function getAcademicWeekForDate(
+  date,
+  termStartDate
+) {
+  const target = toDateOnly(date);
+  const start = toDateOnly(termStartDate);
+
+  if (!target || !start) {
+    return null;
+  }
+
+  const millisecondsPerDay =
+    24 * 60 * 60 * 1000;
+
+  const difference =
+    target.getTime() -
+    start.getTime();
+
+  const daysSinceStart =
+    Math.floor(
+      difference / millisecondsPerDay
+    );
+
+  if (daysSinceStart < 0) {
+    return null;
+  }
+
+  return (
+    Math.floor(daysSinceStart / 7) +
+    1
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Week helpers                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Normalize weekNumber into an array.
- */
 function getLessonWeeks(lesson) {
   if (!lesson) {
     return [];
@@ -315,42 +402,50 @@ function getLessonWeeks(lesson) {
     return [];
   }
 
-  const weeks = Array.isArray(value)
+  const values = Array.isArray(value)
     ? value
     : [value];
 
-  return weeks
-    .map((week) => Number(week))
-    .filter((week) => Number.isFinite(week));
+  return values
+    .flatMap((item) => {
+      if (
+        typeof item === 'string' &&
+        item.includes(',')
+      ) {
+        return item.split(',');
+      }
+
+      return [item];
+    })
+    .map((item) => Number(item))
+    .filter((item) =>
+      Number.isFinite(item)
+    );
 }
 
 function lessonMatchesWeek(
   lesson,
-  currentWeek
+  academicWeek
 ) {
-  if (!lesson) {
-    return false;
-  }
+  const weeks =
+    getLessonWeeks(lesson);
 
-  const weeks = getLessonWeeks(lesson);
-
-  // No week restriction means every week.
+  // No restriction.
   if (weeks.length === 0) {
     return true;
   }
 
-  const normalizedCurrentWeek =
-    Number(currentWeek);
+  const week = Number(
+    academicWeek
+  );
 
-  if (
-    !Number.isFinite(normalizedCurrentWeek)
-  ) {
+  if (!Number.isFinite(week)) {
+    // We cannot determine the week.
+    // Do not hide valid data.
     return true;
   }
 
-  return weeks.includes(
-    normalizedCurrentWeek
-  );
+  return weeks.includes(week);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -365,24 +460,25 @@ function lessonMatchesSubgroup(
     return false;
   }
 
-  const requestedSubgroup =
+  const requested =
     Number(subgroup) || 0;
 
   const lessonSubgroup =
     Number(lesson.numSubgroup) || 0;
 
-  // BSUIR uses 0 for a lesson shared by everyone.
+  // 0 = everyone.
   if (lessonSubgroup === 0) {
     return true;
   }
 
-  // Unknown subgroup: don't accidentally hide lessons.
-  if (requestedSubgroup === 0) {
+  // No selected subgroup.
+  // Do not hide the lesson.
+  if (requested === 0) {
     return true;
   }
 
   return (
-    lessonSubgroup === requestedSubgroup
+    lessonSubgroup === requested
   );
 }
 
@@ -394,13 +490,7 @@ function lessonMatchesDate(
   lesson,
   date
 ) {
-  if (!lesson || !date) {
-    return false;
-  }
-
-  const targetDate = toDateOnly(date);
-
-  if (!targetDate) {
+  if (!lesson) {
     return false;
   }
 
@@ -414,26 +504,20 @@ function lessonMatchesDate(
     lesson.endDate ||
     null;
 
-  //
-  // If BSUIR supplied explicit dates, use them.
-  //
-  if (startDate || endDate) {
-    return dateIsBetween(
-      targetDate,
-      startDate,
-      endDate
-    );
+  // No explicit date range.
+  if (!startDate && !endDate) {
+    return true;
   }
 
-  //
-  // No explicit range means the lesson is considered
-  // recurring and weekNumber determines applicability.
-  //
-  return true;
+  return dateIsBetween(
+    date,
+    startDate,
+    endDate
+  );
 }
 
 /* -------------------------------------------------------------------------- */
-/* Time helpers                                                               */
+/* Time / sorting                                                             */
 /* -------------------------------------------------------------------------- */
 
 function timeStrToMinutes(time) {
@@ -462,110 +546,136 @@ function timeStrToMinutes(time) {
     return Number.MAX_SAFE_INTEGER;
   }
 
-  return hours * 60 + minutes;
+  return (
+    hours * 60 +
+    minutes
+  );
+}
+
+function getLessonStartTime(
+  lesson
+) {
+  return (
+    lesson?.startLessonTime ||
+    lesson?.startTime ||
+    lesson?.time?.split?.('-')?.[0] ||
+    ''
+  );
+}
+
+function getLessonEndTime(
+  lesson
+) {
+  return (
+    lesson?.endLessonTime ||
+    lesson?.endTime ||
+    lesson?.time?.split?.('-')?.[1] ||
+    ''
+  );
 }
 
 function sortLessons(lessons) {
-  return [...lessons].sort((a, b) => {
-    const timeDifference =
-      timeStrToMinutes(
-        a.startLessonTime
-      ) -
-      timeStrToMinutes(
-        b.startLessonTime
+  return [...lessons].sort(
+    (a, b) => {
+      const timeDifference =
+        timeStrToMinutes(
+          getLessonStartTime(a)
+        ) -
+        timeStrToMinutes(
+          getLessonStartTime(b)
+        );
+
+      if (timeDifference !== 0) {
+        return timeDifference;
+      }
+
+      const subjectA =
+        String(
+          a?.subjectFullName ||
+            a?.subject ||
+            ''
+        ).toLowerCase();
+
+      const subjectB =
+        String(
+          b?.subjectFullName ||
+            b?.subject ||
+            ''
+        ).toLowerCase();
+
+      return subjectA.localeCompare(
+        subjectB
       );
-
-    if (timeDifference !== 0) {
-      return timeDifference;
     }
-
-    //
-    // Stable secondary sorting.
-    //
-    const subjectA =
-      String(
-        a.subjectFullName ||
-          a.subject ||
-          ''
-      ).toLowerCase();
-
-    const subjectB =
-      String(
-        b.subjectFullName ||
-          b.subject ||
-          ''
-      ).toLowerCase();
-
-    return subjectA.localeCompare(
-      subjectB
-    );
-  });
+  );
 }
 
 /* -------------------------------------------------------------------------- */
-/* Schedule source helpers                                                    */
+/* Schedule source extraction                                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Return the actual timetable object from the API response.
- *
- * Current BSUIR responses can look like:
- *
- * {
- *   schedules: null,
- *   nextSchedules: {
- *     Понедельник: [...]
- *   }
- * }
- *
- * Older/current responses can also have schedules directly.
- */
-function getScheduleSource(scheduleData) {
+function getScheduleSource(
+  scheduleData
+) {
   if (!scheduleData) {
     return {};
   }
 
-  //
-  // scheduleData itself may already be the schedules object.
-  //
+  /*
+   * Direct schedules object:
+   *
+   * {
+   *   "2026-09-01": [...],
+   *   "2026-09-02": [...]
+   * }
+   *
+   * or:
+   *
+   * {
+   *   "Понедельник": [...]
+   * }
+   */
   if (
     !scheduleData.schedules &&
     !scheduleData.nextSchedules &&
     !scheduleData.data &&
     typeof scheduleData === 'object'
   ) {
-    const possibleDayKeys =
+    const keys =
       Object.keys(scheduleData);
 
-    const containsDay =
-      possibleDayKeys.some(
+    const looksLikeScheduleObject =
+      keys.some(
         (key) =>
-          normalizeDayName(key) !== key ||
-          RU_DAY_NAMES.includes(key)
+          isDateKey(key) ||
+          RU_DAY_NAMES.includes(key) ||
+          DAY_ALIASES[key]
       );
 
-    if (containsDay) {
+    if (
+      looksLikeScheduleObject
+    ) {
       return scheduleData;
     }
   }
 
-  //
-  // Prefer schedules when it contains actual data.
-  //
+  /*
+   * Prefer schedules when populated.
+   */
   if (
     scheduleData.schedules &&
     typeof scheduleData.schedules ===
       'object' &&
-    Object.keys(scheduleData.schedules)
-      .length > 0
+    Object.keys(
+      scheduleData.schedules
+    ).length > 0
   ) {
     return scheduleData.schedules;
   }
 
-  //
-  // BSUIR may expose the upcoming/current timetable
-  // through nextSchedules while schedules is null.
-  //
+  /*
+   * Raw BSUIR fallback.
+   */
   if (
     scheduleData.nextSchedules &&
     typeof scheduleData.nextSchedules ===
@@ -577,12 +687,13 @@ function getScheduleSource(scheduleData) {
     return scheduleData.nextSchedules;
   }
 
-  //
-  // Some callers may pass { data: { schedules... } }.
-  //
+  /*
+   * Nested data wrapper.
+   */
   if (
     scheduleData.data &&
-    typeof scheduleData.data === 'object'
+    typeof scheduleData.data ===
+      'object'
   ) {
     if (
       scheduleData.data.schedules &&
@@ -594,28 +705,90 @@ function getScheduleSource(scheduleData) {
 
     if (
       scheduleData.data.nextSchedules &&
-      typeof scheduleData.data
-        .nextSchedules === 'object'
+      typeof scheduleData.data.nextSchedules ===
+        'object'
     ) {
-      return scheduleData.data.nextSchedules;
+      return (
+        scheduleData.data.nextSchedules
+      );
+    }
+
+    /*
+     * data itself can be the date-keyed
+     * schedule object.
+     */
+    const dataKeys =
+      Object.keys(scheduleData.data);
+
+    if (
+      dataKeys.some(
+        (key) =>
+          isDateKey(key) ||
+          RU_DAY_NAMES.includes(key) ||
+          DAY_ALIASES[key]
+      )
+    ) {
+      return scheduleData.data;
     }
   }
 
   return {};
 }
 
-/**
- * Convenience function when callers have the entire API response.
- */
-function getScheduleEntries(scheduleData) {
-  const source =
-    getScheduleSource(scheduleData);
-
-  return source;
+function getScheduleEntries(
+  scheduleData
+) {
+  return getScheduleSource(
+    scheduleData
+  );
 }
 
 /* -------------------------------------------------------------------------- */
-/* Raw lesson collection                                                      */
+/* Date-keyed schedule support                                                */
+/* -------------------------------------------------------------------------- */
+
+function getLessonsForDateKey(
+  schedules,
+  date
+) {
+  if (
+    !schedules ||
+    typeof schedules !== 'object'
+  ) {
+    return [];
+  }
+
+  const key = dateKey(date);
+
+  if (!key) {
+    return [];
+  }
+
+  const value =
+    schedules[key];
+
+  return Array.isArray(value)
+    ? value
+    : [];
+}
+
+function scheduleIsDateKeyed(
+  schedules
+) {
+  if (
+    !schedules ||
+    typeof schedules !== 'object'
+  ) {
+    return false;
+  }
+
+  return Object.keys(
+    schedules
+  ).some(isDateKey);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Weekday schedule support                                                   */
 /* -------------------------------------------------------------------------- */
 
 function getLessonsForDay(
@@ -644,17 +817,18 @@ function getLessonsForDay(
   for (const key of candidates) {
     if (
       key &&
-      Array.isArray(schedules[key])
+      Array.isArray(
+        schedules[key]
+      )
     ) {
       return schedules[key];
     }
   }
 
-  //
-  // Be defensive about accidental casing/spacing.
-  //
   const matchingKey =
-    Object.keys(schedules).find(
+    Object.keys(
+      schedules
+    ).find(
       (key) =>
         normalizeDayName(
           String(key).trim()
@@ -667,10 +841,98 @@ function getLessonsForDay(
       schedules[matchingKey]
     )
   ) {
-    return schedules[matchingKey];
+    return schedules[
+      matchingKey
+    ];
   }
 
   return [];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Lesson identity / deduplication                                            */
+/* -------------------------------------------------------------------------- */
+
+function lessonIdentity(
+  lesson
+) {
+  if (!lesson) {
+    return '';
+  }
+
+  if (
+    lesson.id !== undefined &&
+    lesson.id !== null
+  ) {
+    return `id:${lesson.id}`;
+  }
+
+  const groups = Array.isArray(
+    lesson.studentGroups
+  )
+    ? lesson.studentGroups
+        .map(
+          (group) =>
+            group?.name || ''
+        )
+        .join(',')
+    : '';
+
+  const teachers =
+    Array.isArray(
+      lesson.employees
+    )
+      ? lesson.employees
+          .map(
+            (employee) =>
+              employee?.id ||
+              employee?.urlId ||
+              ''
+          )
+          .join(',')
+      : '';
+
+  const rooms =
+    Array.isArray(
+      lesson.auditories
+    )
+      ? lesson.auditories.join(',')
+      : '';
+
+  return [
+    lesson.subject || '',
+    lesson.subjectFullName || '',
+    getLessonStartTime(lesson),
+    getLessonEndTime(lesson),
+    lesson.startLessonDate || '',
+    lesson.endLessonDate || '',
+    getLessonWeeks(lesson).join(','),
+    Number(lesson.numSubgroup) || 0,
+    groups,
+    teachers,
+    rooms
+  ].join('|');
+}
+
+function dedupeLessons(
+  lessons
+) {
+  const result = [];
+  const seen = new Set();
+
+  for (const lesson of lessons) {
+    const key =
+      lessonIdentity(lesson);
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(lesson);
+  }
+
+  return result;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -678,26 +940,9 @@ function getLessonsForDay(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Resolve all lessons that ACTUALLY occur on a specific calendar date.
+ * Resolve lessons for ONE actual calendar date.
  *
- * This is the primary resolver for the new schedule UI.
- *
- * Example:
- *
- * resolveLessonsForDate(
- *   scheduleData,
- *   new Date(2026, 8, 10),
- *   2,
- *   1
- * )
- *
- * will resolve Thursday, September 10, 2026,
- * then apply:
- *
- *   1. date range
- *   2. week number
- *   3. subgroup
- *   4. time sorting
+ * This is the primary resolver used by ScheduleView.
  */
 function resolveLessonsForDate(
   scheduleData,
@@ -705,18 +950,17 @@ function resolveLessonsForDate(
   currentWeek,
   subgroup = 0
 ) {
-  if (!date) {
-    return [];
-  }
-
-  const targetDate = toDateOnly(date);
+  const targetDate =
+    toDateOnly(date);
 
   if (!targetDate) {
     return [];
   }
 
   const schedules =
-    getScheduleSource(scheduleData);
+    getScheduleSource(
+      scheduleData
+    );
 
   if (
     !schedules ||
@@ -725,104 +969,133 @@ function resolveLessonsForDate(
     return [];
   }
 
-  const dayName =
-    weekdayNameForDate(targetDate);
+  /*
+   * If App has already converted the API into
+   * YYYY-MM-DD keys, use the exact date first.
+   */
+  let candidates = [];
 
-  if (!dayName) {
+  if (
+    scheduleIsDateKeyed(
+      schedules
+    )
+  ) {
+    candidates =
+      getLessonsForDateKey(
+        schedules,
+        targetDate
+      );
+  }
+
+  /*
+   * If there was no exact date entry,
+   * support raw weekday schedules.
+   */
+  if (candidates.length === 0) {
+    const dayName =
+      weekdayNameForDate(
+        targetDate
+      );
+
+    candidates =
+      getLessonsForDay(
+        schedules,
+        dayName
+      );
+  }
+
+  if (
+    !Array.isArray(candidates) ||
+    candidates.length === 0
+  ) {
     return [];
   }
 
-  const dayLessons =
-    getLessonsForDay(
-      schedules,
-      dayName
+  /*
+   * Prefer a deterministic academic week
+   * calculated from the actual term start.
+   *
+   * Only fall back to currentWeek if the
+   * response doesn't contain startDate.
+   */
+  const calculatedWeek =
+    getAcademicWeekForDate(
+      targetDate,
+      getTermStartDate(
+        scheduleData
+      )
     );
 
-  if (!Array.isArray(dayLessons)) {
-    return [];
-  }
+  const effectiveWeek =
+    calculatedWeek ??
+    Number(currentWeek);
 
   const filtered =
-    dayLessons.filter((lesson) => {
-      if (!lesson) {
-        return false;
+    candidates.filter(
+      (lesson) => {
+        if (!lesson) {
+          return false;
+        }
+
+        /*
+         * The exact date key already proves
+         * the lesson was assigned to this date.
+         *
+         * We still apply explicit BSUIR date
+         * ranges when they exist.
+         */
+        if (
+          !lessonMatchesDate(
+            lesson,
+            targetDate
+          )
+        ) {
+          return false;
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * For date-keyed schedules, the date
+         * expansion has already selected the
+         * actual occurrence.
+         *
+         * Therefore weekNumber is only used
+         * as a filter when the schedule is
+         * still weekday-based.
+         */
+        if (
+          !scheduleIsDateKeyed(
+            schedules
+          ) &&
+          !lessonMatchesWeek(
+            lesson,
+            effectiveWeek
+          )
+        ) {
+          return false;
+        }
+
+        if (
+          !lessonMatchesSubgroup(
+            lesson,
+            subgroup
+          )
+        ) {
+          return false;
+        }
+
+        return true;
       }
+    );
 
-      if (
-        !lessonMatchesDate(
-          lesson,
-          targetDate
-        )
-      ) {
-        return false;
-      }
-
-      if (
-        !lessonMatchesWeek(
-          lesson,
-          currentWeek
-        )
-      ) {
-        return false;
-      }
-
-      if (
-        !lessonMatchesSubgroup(
-          lesson,
-          subgroup
-        )
-      ) {
-        return false;
-      }
-
-      return true;
-    });
-
-  //
-  // Remove accidental duplicate entries.
-  //
-  const unique = [];
-  const seen = new Set();
-
-  for (const lesson of filtered) {
-    const weeks =
-      getLessonWeeks(lesson)
-        .join(',');
-
-    const key = [
-      lesson.subject ||
-        lesson.subjectFullName ||
-        '',
-      lesson.startLessonTime ||
-        '',
-      lesson.endLessonTime ||
-        '',
-      lesson.startLessonDate ||
-        '',
-      lesson.endLessonDate ||
-        '',
-      weeks,
-      Number(lesson.numSubgroup) || 0,
-      Array.isArray(lesson.auditories)
-        ? lesson.auditories.join(',')
-        : ''
-    ].join('|');
-
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    unique.push(lesson);
-  }
-
-  return sortLessons(unique);
+  return sortLessons(
+    dedupeLessons(filtered)
+  );
 }
 
 /**
- * Resolve a specific calendar date and normalize every lesson.
- *
- * This is convenient for ScheduleView.
+ * Resolve and normalize lessons for a date.
  */
 function resolveNormalizedLessonsForDate(
   scheduleData,
@@ -844,736 +1117,24 @@ function resolveNormalizedLessonsForDate(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Recurring weekday compatibility                                            */
+/* Week resolution                                                            */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Resolve all recurring lessons for a weekday.
+ * Resolve a complete calendar week.
  *
- * Kept for compatibility with existing callers.
- *
- * NOTE:
- * This should NOT be used as the primary calendar UI resolver.
- */
-function resolveLessonsForWeekday(
-  scheduleData,
-  dayName,
-  subgroup = 0
-) {
-  const schedules =
-    getScheduleSource(scheduleData);
-
-  if (
-    !schedules ||
-    typeof schedules !== 'object'
-  ) {
-    return {};
-  }
-
-  const normalizedDay =
-    normalizeDayName(dayName);
-
-  const dayLessons =
-    getLessonsForDay(
-      schedules,
-      normalizedDay
-    );
-
-  if (!Array.isArray(dayLessons)) {
-    return {};
-  }
-
-  const filtered =
-    dayLessons.filter((lesson) =>
-      lessonMatchesSubgroup(
-        lesson,
-        subgroup
-      )
-    );
-
-  const grouped = {};
-
-  for (const lesson of filtered) {
-    const weeks =
-      getLessonWeeks(lesson);
-
-    //
-    // No week restriction.
-    //
-    if (weeks.length === 0) {
-      if (!grouped.all) {
-        grouped.all = [];
-      }
-
-      grouped.all.push(lesson);
-      continue;
-    }
-
-    for (const week of weeks) {
-      const key = String(week);
-
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
-
-      grouped[key].push(lesson);
-    }
-  }
-
-  for (const key of Object.keys(grouped)) {
-    grouped[key] =
-      sortLessons(grouped[key]);
-  }
-
-  return grouped;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Academic week calculation                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Calculate the academic week relative to a term start date.
- *
- * BSUIR provides currentPeriod/currentWeek in some API responses,
- * but when resolving arbitrary calendar dates we need a deterministic
- * calculation.
- *
- * Example:
- *
- * startDate = 01.09.2026
- *
- * 01.09.2026 -> week 1
- * 07.09.2026 -> week 2
- * 14.09.2026 -> week 3
- */
-function getAcademicWeekForDate(
-  date,
-  termStartDate
-) {
-  const target =
-    toDateOnly(date);
-
-  const start =
-    toDateOnly(termStartDate);
-
-  if (!target || !start) {
-    return null;
-  }
-
-  const millisecondsPerDay =
-    24 * 60 * 60 * 1000;
-
-  const diff =
-    Math.floor(
-      (
-        target.getTime() -
-        start.getTime()
-      ) / millisecondsPerDay
-    );
-
-  if (diff < 0) {
-    return null;
-  }
-
-  return (
-    Math.floor(diff / 7) + 1
-  );
-}
-
-/**
- * More robust academic week calculation.
- *
- * The first academic week starts on the Monday of the week containing
- * the term start date.
- *
- * This avoids weird results if a term happens to start mid-week.
- */
-function getAcademicWeekForDateMondayBased(
-  date,
-  termStartDate
-) {
-  const target =
-    toDateOnly(date);
-
-  const start =
-    toDateOnly(termStartDate);
-
-  if (!target || !start) {
-    return null;
-  }
-
-  const getMonday =
-    (value) => {
-      const result =
-        toDateOnly(value);
-
-      const day =
-        result.getDay();
-
-      const offset =
-        day === 0
-          ? -6
-          : 1 - day;
-
-      result.setDate(
-        result.getDate() +
-          offset
-      );
-
-      return result;
-    };
-
-  const targetMonday =
-    getMonday(target);
-
-  const startMonday =
-    getMonday(start);
-
-  const millisecondsPerDay =
-    24 * 60 * 60 * 1000;
-
-  const diffDays =
-    Math.floor(
-      (
-        targetMonday.getTime() -
-        startMonday.getTime()
-      ) / millisecondsPerDay
-    );
-
-  return (
-    Math.floor(
-      diffDays / 7
-    ) + 1
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Date range generation                                                      */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Generate a complete calendar range.
- *
- * Useful for the new schedule view when rendering:
- *
- *   Mon 07.09
- *   Tue 08.09
- *   Wed 09.09
- *   ...
- *
- * rather than a purely recurring weekday selector.
- */
-function getDateRange(
-  startDate,
-  endDate
-) {
-  const start =
-    toDateOnly(startDate);
-
-  const end =
-    toDateOnly(endDate);
-
-  if (!start || !end) {
-    return [];
-  }
-
-  if (start > end) {
-    return [];
-  }
-
-  const dates = [];
-
-  const cursor =
-    new Date(
-      start.getTime()
-    );
-
-  while (cursor <= end) {
-    dates.push(
-      new Date(
-        cursor.getTime()
-      )
-    );
-
-    cursor.setDate(
-      cursor.getDate() + 1
-    );
-  }
-
-  return dates;
-}
-
-/**
- * Generate the academic calendar dates using the API term dates.
- */
-function getAcademicDateRange(
-  scheduleData
-) {
-  if (!scheduleData) {
-    return [];
-  }
-
-  const startDate =
-    scheduleData.startDate ||
-    scheduleData.data?.startDate ||
-    null;
-
-  const endDate =
-    scheduleData.endDate ||
-    scheduleData.data?.endDate ||
-    null;
-
-  return getDateRange(
-    startDate,
-    endDate
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Daily schedule metadata                                                    */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Return useful information about a calendar date.
- *
- * Example:
+ * Returns:
  *
  * {
- *   date: Date,
- *   dateKey: '2026-09-10',
- *   dayName: 'Четверг',
- *   lessons: [...],
- *   count: 3
- * }
- */
-function resolveDay(
-  scheduleData,
-  date,
-  currentWeek,
-  subgroup = 0
-) {
-  const normalizedDate =
-    toDateOnly(date);
-
-  if (!normalizedDate) {
-    return {
-      date: null,
-      dateKey: null,
-      dayName: null,
-      lessons: [],
-      count: 0
-    };
-  }
-
-  const lessons =
-    resolveLessonsForDate(
-      scheduleData,
-      normalizedDate,
-      currentWeek,
-      subgroup
-    );
-
-  return {
-    date: normalizedDate,
-
-    dateKey:
-      dateKey(normalizedDate),
-
-    dayName:
-      weekdayNameForDate(
-        normalizedDate
-      ),
-
-    lessons,
-
-    normalizedLessons:
-      lessons.map((lesson) =>
-        normalizeLesson(
-          lesson,
-          normalizedDate
-        )
-      ),
-
-    count:
-      lessons.length
-  };
-}
-
-/**
- * Resolve every date in an academic term.
- *
- * This is useful if the UI needs to build a calendar/week/month view.
- */
-function resolveAcademicCalendar(
-  scheduleData,
-  subgroup = 0
-) {
-  const dates =
-    getAcademicDateRange(
-      scheduleData
-    );
-
-  if (dates.length === 0) {
-    return [];
-  }
-
-  const termStart =
-    scheduleData?.startDate ||
-    scheduleData?.data?.startDate ||
-    null;
-
-  return dates.map((date) => {
-    const academicWeek =
-      getAcademicWeekForDateMondayBased(
-        date,
-        termStart
-      );
-
-    return {
-      ...resolveDay(
-        scheduleData,
-        date,
-        academicWeek,
-        subgroup
-      ),
-
-      academicWeek
-    };
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/* Lesson normalization                                                       */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Normalize a raw BSUIR lesson into the shape expected by the UI.
- *
- * `date` is optional but important for the new date-based view.
- */
-function normalizeLesson(
-  lesson,
-  date = null
-) {
-  if (!lesson) {
-    return {
-      id: `unknown-${Date.now()}`,
-
-      subject: 'Lesson',
-
-      subjectShort: '',
-
-      type: 'Lecture',
-
-      room: 'N/A',
-
-      teacher: 'Faculty',
-
-      time:
-        '--:-- - --:--',
-
-      startLessonTime: null,
-
-      endLessonTime: null,
-
-      weekNumber: [],
-
-      numSubgroup: 0,
-
-      note: null,
-
-      date:
-        date
-          ? dateKey(date)
-          : null,
-
-      rawLesson: null
-    };
-  }
-
-  const employees =
-    Array.isArray(
-      lesson.employees
-    )
-      ? lesson.employees
-      : [];
-
-  const teacherNames =
-    employees
-      .map((employee) => {
-        if (!employee) {
-          return '';
-        }
-
-        const lastName =
-          employee.lastName || '';
-
-        const firstName =
-          employee.firstName || '';
-
-        const middleName =
-          employee.middleName || '';
-
-        const firstInitial =
-          firstName
-            ? `${firstName.charAt(0)}.`
-            : '';
-
-        const middleInitial =
-          middleName
-            ? ` ${middleName.charAt(0)}.`
-            : '';
-
-        return (
-          `${lastName} ${firstInitial}${middleInitial}`
-        ).trim();
-      })
-      .filter(Boolean);
-
-  const auditories =
-    Array.isArray(
-      lesson.auditories
-    )
-      ? lesson.auditories
-      : [];
-
-  const room =
-    auditories.length > 0
-      ? auditories
-          .map((auditory) => {
-            if (
-              typeof auditory ===
-              'string'
-            ) {
-              return auditory;
-            }
-
-            if (
-              auditory &&
-              typeof auditory ===
-                'object'
-            ) {
-              return (
-                auditory.auditoryName ||
-                auditory.name ||
-                auditory.number ||
-                auditory.room ||
-                ''
-              );
-            }
-
-            return '';
-          })
-          .filter(Boolean)
-          .join(', ')
-      : 'N/A';
-
-  const startTime =
-    lesson.startLessonTime ||
-    '--:--';
-
-  const endTime =
-    lesson.endLessonTime ||
-    '--:--';
-
-  const weekNumber =
-    getLessonWeeks(lesson);
-
-  const lessonDate =
-    date
-      ? dateKey(date)
-      : null;
-
-  //
-  // Prefer an API id if one exists.
-  // Otherwise build a deterministic id.
-  //
-  const generatedId = [
-    lesson.subject ||
-      lesson.subjectFullName ||
-      'lesson',
-
-    lesson.startLessonTime ||
-      '',
-
-    lesson.endLessonTime ||
-      '',
-
-    lesson.startLessonDate ||
-      '',
-
-    lesson.endLessonDate ||
-      '',
-
-    weekNumber.join('-'),
-
-    Number(
-      lesson.numSubgroup
-    ) || 0,
-
-    lessonDate || ''
-  ].join('-');
-
-  return {
-    id:
-      lesson.id ||
-      generatedId,
-
-    subject:
-      lesson.subjectFullName ||
-      lesson.subject ||
-      'Lesson',
-
-    subjectShort:
-      lesson.subject ||
-      '',
-
-    type:
-      lesson.lessonTypeAbbrev ||
-      lesson.lessonType ||
-      'Lecture',
-
-    room,
-
-    teacher:
-      teacherNames.length > 0
-        ? teacherNames.join(', ')
-        : 'Faculty',
-
-    time:
-      `${startTime} - ${endTime}`,
-
-    startLessonTime:
-      lesson.startLessonTime ||
-      null,
-
-    endLessonTime:
-      lesson.endLessonTime ||
-      null,
-
-    weekNumber,
-
-    numSubgroup:
-      Number(
-        lesson.numSubgroup
-      ) || 0,
-
-    note:
-      lesson.note ||
-      null,
-
-    //
-    // New date-aware fields.
-    //
-    date: lessonDate,
-
-    startLessonDate:
-      lesson.startLessonDate ||
-      null,
-
-    endLessonDate:
-      lesson.endLessonDate ||
-      null,
-
-    //
-    // Useful metadata for the UI.
-    //
-    announcement:
-      Boolean(
-        lesson.announcement
-      ),
-
-    split:
-      Boolean(
-        lesson.split
-      ),
-
-    rawLesson:
-      lesson
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* Convenience API                                                            */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Resolve + normalize a calendar date in one call.
- *
- * This is the function ScheduleView should eventually use.
- */
-function getLessonsForDate(
-  scheduleData,
-  date,
-  subgroup = 0
-) {
-  const normalizedDate =
-    toDateOnly(date);
-
-  if (!normalizedDate) {
-    return [];
-  }
-
-  //
-  // Prefer API-provided currentPeriod/currentWeek.
-  //
-  let currentWeek =
-    Number(
-      scheduleData?.currentWeek
-    );
-
-  //
-  // If the API didn't provide one, calculate it
-  // from the academic term start date.
-  //
-  if (!Number.isFinite(currentWeek)) {
-    currentWeek =
-      getAcademicWeekForDateMondayBased(
-        normalizedDate,
-        scheduleData?.startDate ||
-          scheduleData?.data?.startDate
-      );
-  }
-
-  //
-  // If there is still no week, don't filter by week.
-  //
-  const lessons =
-    resolveLessonsForDate(
-      scheduleData,
-      normalizedDate,
-      currentWeek,
-      subgroup
-    );
-
-  return lessons.map(
-    (lesson) =>
-      normalizeLesson(
-        lesson,
-        normalizedDate
-      )
-  );
-}
-
-/**
- * Resolve a whole week starting from a given date.
- *
- * The result is:
- *
- * [
- *   {
- *     date,
- *     dateKey,
- *     dayName,
- *     lessons
- *   },
+ *   "2026-09-07": [...],
+ *   "2026-09-08": [...],
  *   ...
- * ]
+ * }
  */
 function resolveWeek(
   scheduleData,
   weekStartDate,
+  currentWeek,
   subgroup = 0
 ) {
   const start =
@@ -1582,139 +1143,491 @@ function resolveWeek(
     );
 
   if (!start) {
-    return [];
+    return {};
   }
 
-  //
-  // Normalize to Monday.
-  //
-  const day =
-    start.getDay();
+  const result = {};
 
-  const mondayOffset =
-    day === 0
-      ? -6
-      : 1 - day;
-
-  start.setDate(
-    start.getDate() +
-      mondayOffset
-  );
-
-  const dates =
-    getDateRange(
-      start,
-      new Date(
-        start.getFullYear(),
-        start.getMonth(),
-        start.getDate() + 6
-      )
+  for (let i = 0; i < 7; i += 1) {
+    const date = new Date(
+      start.getFullYear(),
+      start.getMonth(),
+      start.getDate() + i
     );
 
-  return dates.map(
-    (date) => {
-      const academicWeek =
-        getAcademicWeekForDateMondayBased(
-          date,
-          scheduleData?.startDate ||
-            scheduleData?.data?.startDate
-        );
+    const key =
+      dateKey(date);
 
-      const lessons =
-        resolveLessonsForDate(
-          scheduleData,
-          date,
-          academicWeek,
-          subgroup
-        );
-
-      return {
+    result[key] =
+      resolveLessonsForDate(
+        scheduleData,
         date,
+        currentWeek,
+        subgroup
+      );
+  }
 
-        dateKey:
-          dateKey(date),
+  return result;
+}
 
-        dayName:
-          weekdayNameForDate(
-            date
-          ),
+/**
+ * Resolve a complete week with normalized lessons.
+ */
+function resolveNormalizedWeek(
+  scheduleData,
+  weekStartDate,
+  currentWeek,
+  subgroup = 0
+) {
+  const start =
+    toDateOnly(
+      weekStartDate
+    );
 
-        academicWeek,
+  if (!start) {
+    return {};
+  }
 
-        lessons,
+  const result = {};
 
-        normalizedLessons:
-          lessons.map(
-            (lesson) =>
-              normalizeLesson(
-                lesson,
-                date
-              )
-          ),
+  for (let i = 0; i < 7; i += 1) {
+    const date = new Date(
+      start.getFullYear(),
+      start.getMonth(),
+      start.getDate() + i
+    );
 
-        count:
-          lessons.length
-      };
-    }
-  );
+    const key =
+      dateKey(date);
+
+    result[key] =
+      resolveNormalizedLessonsForDate(
+        scheduleData,
+        date,
+        currentWeek,
+        subgroup
+      );
+  }
+
+  return result;
 }
 
 /* -------------------------------------------------------------------------- */
-/* Exports                                                                    */
+/* Weekday compatibility                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Legacy compatibility resolver.
+ *
+ * Returns:
+ *
+ * {
+ *   all: [...],
+ *   "1": [...],
+ *   "2": [...],
+ *   ...
+ * }
+ */
+function resolveLessonsForWeekday(
+  scheduleData,
+  dayName,
+  subgroup = 0
+) {
+  const schedules =
+    getScheduleSource(
+      scheduleData
+    );
+
+  if (
+    !schedules ||
+    typeof schedules !== 'object'
+  ) {
+    return {};
+  }
+
+  /*
+   * For date-keyed schedules we must collect
+   * matching dates rather than looking for
+   * "Четверг" directly.
+   */
+  if (
+    scheduleIsDateKeyed(
+      schedules
+    )
+  ) {
+    const normalizedDay =
+      normalizeDayName(
+        dayName
+      );
+
+    const result = {};
+
+    for (
+      const key of Object.keys(
+        schedules
+      )
+    ) {
+      if (!isDateKey(key)) {
+        continue;
+      }
+
+      const date =
+        toDateOnly(key);
+
+      if (!date) {
+        continue;
+      }
+
+      if (
+        weekdayNameForDate(
+          date
+        ) !== normalizedDay
+      ) {
+        continue;
+      }
+
+      const lessons =
+        Array.isArray(
+          schedules[key]
+        )
+          ? schedules[key]
+          : [];
+
+      for (const lesson of lessons) {
+        if (
+          !lessonMatchesSubgroup(
+            lesson,
+            subgroup
+          )
+        ) {
+          continue;
+        }
+
+        const weeks =
+          getLessonWeeks(
+            lesson
+          );
+
+        if (
+          weeks.length === 0
+        ) {
+          if (!result.all) {
+            result.all = [];
+          }
+
+          result.all.push(
+            lesson
+          );
+
+          continue;
+        }
+
+        for (const week of weeks) {
+          const keyWeek =
+            String(week);
+
+          if (
+            !result[keyWeek]
+          ) {
+            result[keyWeek] = [];
+          }
+
+          result[keyWeek].push(
+            lesson
+          );
+        }
+      }
+    }
+
+    for (
+      const key of Object.keys(
+        result
+      )
+    ) {
+      result[key] =
+        sortLessons(
+          dedupeLessons(
+            result[key]
+          )
+        );
+    }
+
+    return result;
+  }
+
+  /*
+   * Raw weekday schedule.
+   */
+  const normalizedDay =
+    normalizeDayName(
+      dayName
+    );
+
+  const lessons =
+    getLessonsForDay(
+      schedules,
+      normalizedDay
+    );
+
+  if (!Array.isArray(lessons)) {
+    return {};
+  }
+
+  const filtered =
+    lessons.filter(
+      (lesson) =>
+        lessonMatchesSubgroup(
+          lesson,
+          subgroup
+        )
+    );
+
+  const grouped = {};
+
+  for (const lesson of filtered) {
+    const weeks =
+      getLessonWeeks(
+        lesson
+      );
+
+    if (
+      weeks.length === 0
+    ) {
+      if (!grouped.all) {
+        grouped.all = [];
+      }
+
+      grouped.all.push(
+        lesson
+      );
+
+      continue;
+    }
+
+    for (const week of weeks) {
+      const key =
+        String(week);
+
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+
+      grouped[key].push(
+        lesson
+      );
+    }
+  }
+
+  for (
+    const key of Object.keys(
+      grouped
+    )
+  ) {
+    grouped[key] =
+      sortLessons(
+        dedupeLessons(
+          grouped[key]
+        )
+      );
+  }
+
+  return grouped;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Normalization                                                              */
+/* -------------------------------------------------------------------------- */
+
+function getTeacherName(
+  lesson
+) {
+  if (
+    !lesson ||
+    !Array.isArray(
+      lesson.employees
+    )
+  ) {
+    return '';
+  }
+
+  return lesson.employees
+    .map((employee) => {
+      if (!employee) {
+        return '';
+      }
+
+      return [
+        employee.lastName,
+        employee.firstName,
+        employee.middleName
+      ]
+        .filter(Boolean)
+        .join(' ');
+    })
+    .filter(Boolean)
+    .join(', ');
+}
+
+function getRoomName(
+  lesson
+) {
+  if (
+    !lesson ||
+    !Array.isArray(
+      lesson.auditories
+    )
+  ) {
+    return '';
+  }
+
+  return lesson.auditories
+    .filter(Boolean)
+    .join(', ');
+}
+
+function normalizeLesson(
+  lesson,
+  date = null
+) {
+  if (!lesson) {
+    return null;
+  }
+
+  const startTime =
+    getLessonStartTime(
+      lesson
+    );
+
+  const endTime =
+    getLessonEndTime(
+      lesson
+    );
+
+  const normalizedDate =
+    dateKey(date);
+
+  const subject =
+    lesson.subjectFullName ||
+    lesson.subject ||
+    'Lesson';
+
+  const teacher =
+    getTeacherName(
+      lesson
+    );
+
+  const room =
+    getRoomName(
+      lesson
+    );
+
+  /*
+   * Preserve the original BSUIR lesson
+   * while adding UI-friendly properties.
+   */
+  return {
+    ...lesson,
+
+    id:
+      lesson.id ||
+      [
+        normalizedDate || '',
+        subject,
+        startTime,
+        endTime,
+        room,
+        Number(
+          lesson.numSubgroup
+        ) || 0
+      ].join('|'),
+
+    subject,
+
+    subjectFullName:
+      lesson.subjectFullName ||
+      subject,
+
+    teacher,
+
+    room,
+
+    type:
+      lesson.lessonTypeAbbrev ||
+      lesson.type ||
+      'Lecture',
+
+    startLessonTime:
+      startTime,
+
+    endLessonTime:
+      endTime,
+
+    time:
+      startTime && endTime
+        ? `${startTime} - ${endTime}`
+        : startTime,
+
+    date:
+      normalizedDate ||
+      lesson.date ||
+      lesson.dateLesson ||
+      null,
+
+    weekNumber:
+      getLessonWeeks(
+        lesson
+      ),
+
+    subgroup:
+      Number(
+        lesson.numSubgroup
+      ) || 0,
+
+    isPersonal:
+      Boolean(
+        lesson.isPersonal
+      )
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Public exports                                                             */
 /* -------------------------------------------------------------------------- */
 
 export {
   RU_DAY_NAMES,
+  DAY_ALIASES,
 
   normalizeDayName,
-
   weekdayNameForDate,
 
   toDateOnly,
-
   dateKey,
 
-  compareDates,
-
-  dateIsBetween,
-
-  timeStrToMinutes,
-
-  lessonMatchesWeek,
-
-  lessonMatchesSubgroup,
-
-  lessonMatchesDate,
+  getTermStartDate,
+  getTermEndDate,
+  getAcademicWeekForDate,
 
   getLessonWeeks,
+  lessonMatchesWeek,
+  lessonMatchesSubgroup,
+  lessonMatchesDate,
+
+  timeStrToMinutes,
+  sortLessons,
 
   getScheduleSource,
-
   getScheduleEntries,
 
   getLessonsForDay,
 
-  getAcademicWeekForDate,
-
-  getAcademicWeekForDateMondayBased,
-
-  getDateRange,
-
-  getAcademicDateRange,
-
   resolveLessonsForDate,
-
   resolveNormalizedLessonsForDate,
 
-  resolveLessonsForWeekday,
-
-  resolveDay,
-
-  resolveAcademicCalendar,
-
   resolveWeek,
+  resolveNormalizedWeek,
 
-  getLessonsForDate,
+  resolveLessonsForWeekday,
 
   normalizeLesson
 };
