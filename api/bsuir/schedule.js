@@ -60,37 +60,24 @@ const MOCK_SCHEDULE = {
 
 async function fetchCurrentWeek() {
   try {
-    const bsuirRes = await fetch(
-  `https://iis.bsuir.by/api/v1/schedule?studentGroup=${group}`,
-  {
-    headers: {
-      'Accept': 'application/json'
-    }
-  }
-);
-
-    clearTimeout(timeout);
+    const res = await fetch(
+      'https://iis.bsuir.by/api/v1/schedule/current-week',
+      {
+        headers: {
+          Accept: 'application/json'
+        }
+      }
+    );
 
     if (!res.ok) {
       return null;
     }
 
-    const contentType = res.headers.get('content-type') || '';
+    const value = await res.json();
 
-    if (contentType.includes('application/json')) {
-      const value = await res.json();
-
-      return typeof value === 'number'
-        ? value
-        : parseInt(value, 10);
-    }
-
-    const text = await res.text();
-    const parsed = parseInt(text.trim(), 10);
-
-    return Number.isNaN(parsed)
-      ? null
-      : parsed;
+    return typeof value === 'number'
+      ? value
+      : parseInt(value, 10);
 
   } catch {
     return null;
