@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 import FloatingNav from './components/FloatingNav';
 import HomeView from './views/HomeView';
@@ -13,357 +13,743 @@ import { useTelegram } from './hooks/useTelegram';
 import { useOffline } from './hooks/useOffline';
 import { LanguageProvider } from './context/LanguageContext';
 
-/*
- * ============================================================
- * EMPTY DATA
- * ============================================================
- */
+
+/* ============================================================
+   EMPTY DATA
+   ============================================================ */
 
 const EMPTY_DATA = {
   studentGroup: null,
 
   /*
-   * The frontend expects:
+   * Date-based schedule:
    *
    * {
-   *   Monday: [],
-   *   Tuesday: [],
+   *   "2026-09-01": [lesson, lesson],
+   *   "2026-09-02": [lesson],
    *   ...
    * }
-   *
-   * BSUIR may return this as either `schedules` or
-   * `nextSchedules`, so normalizeScheduleData() handles both.
    */
   schedules: {},
 
   todaySchedules: [],
+
   exams: [],
 
   currentWeek: 1,
+
   nextLesson: null,
 
   cached: false,
   fallback: false,
   stale: false,
 
-  debug: null
+  debug: null,
+
+  /*
+   * Keep the original BSUIR data too.
+   * This is useful for debugging and future views.
+   */
+  rawSchedule: null,
+
+  semesterStart: null,
+  semesterEnd: null
 };
 
+
+/* ============================================================
+   DATE HELPERS
+   ============================================================ */
+
 /*
- * ============================================================
- * HELPERS
- * ============================================================
+ * Convert:
+ *
+ * 01.09.2026
+ *
+ * into:
+ *
+ * Date(2026, 8, 1)
+ *
+ * without timezone surprises.
  */
-
-/**
- * Returns true when an object contains actual timetable entries.
- */
-function hasScheduleEntries(schedules) {
-  if (
-    !schedules ||
-    typeof schedules !== 'object' ||
-    Array.isArray(schedules)
-  ) {
-    return false;
+function parseBsuirDate(value) {
+  if (!value) {
+    return null;
   }
 
-  return Object.values(schedules).some(
-    (lessons) =>
-      Array.isArray(lessons) &&
-      lessons.length > 0
+  if (value instanceof Date) {
+    return new Date(
+      value.getFullYear(),
+      value.getMonth(),
+      value.getDate()
+    );
+  }
+
+  const stringValue = String(value).trim();
+
+  /*
+   * BSUIR format:
+   * DD.MM.YYYY
+   */
+  const dotMatch = stringValue.match(
+    /^(\d{2})\.(\d{2})\.(\d{4})$/
+  );
+
+  if (dotMatch) {
+    const day = Number(dotMatch[1]);
+    const month = Number(dotMatch[2]) - 1;
+    const year = Number(dotMatch[3]);
+
+    return new Date(year, month, day);
+  }
+
+  /*
+   * ISO:
+   * YYYY-MM-DD
+   */
+  const isoMatch = stringValue.match(
+    /^(\d{4})-(\d{2})-(\d{2})/
+  );
+
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+
+    return new Date(year, month, day);
+  }
+
+  /*
+   * Last attempt.
+   */
+  const parsed = new Date(stringValue);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Date(
+    parsed.getFullYear(),
+    parsed.getMonth(),
+    parsed.getDate()
   );
 }
 
-/**
- * BSUIR uses Russian weekday names in the response.
+
+/*
+ * Return YYYY-MM-DD.
  *
- * We intentionally preserve them because ScheduleView may already
- * understand the backend's original structure.
+ * IMPORTANT:
+ * Do not use date.toISOString().slice(0, 10)
+ * because that can shift the date around midnight
+ * depending on timezone.
  */
-function normalizeSchedules(schedules) {
-  if (
-    !schedules ||
-    typeof schedules !== 'object' ||
-    Array.isArray(schedules)
-  ) {
-    return {};
+function formatDateKey(date) {
+  if (!date || Number.isNaN(date.getTime())) {
+    return null;
   }
 
-  const normalized = {};
+  const year = date.getFullYear();
 
-  Object.entries(schedules).forEach(
-    ([day, lessons]) => {
-      if (!Array.isArray(lessons)) {
-        return;
-      }
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, '0');
 
-      normalized[day] = lessons;
-    }
-  );
+  const day = String(
+    date.getDate()
+  ).padStart(2, '0');
 
-  return normalized;
+  return `${year}-${month}-${day}`;
 }
 
-/**
- * Converts one BSUIR lesson into the shape expected by the
- * frontend when necessary.
- *
- * We keep the original properties as well, so existing components
- * don't lose any backend-specific information.
+
+/*
+ * Clone a date without changing the original.
  */
-function normalizeLesson(lesson) {
+function cloneDate(date) {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate()
+  );
+}
+
+
+/*
+ * Add N days.
+ */
+function addDays(date, amount) {
+  const result = cloneDate(date);
+
+  result.setDate(
+    result.getDate() + amount
+  );
+
+  return result;
+}
+
+
+/*
+ * Monday = 1
+ * Tuesday = 2
+ * ...
+ * Sunday = 7
+ */
+function getIsoWeekday(date) {
+  const day = date.getDay();
+
+  return day === 0
+    ? 7
+    : day;
+}
+
+
+/*
+ * BSUIR uses Russian weekday names.
+ */
+const WEEKDAY_TO_ISO = {
+  'Понедельник': 1,
+  'Вторник': 2,
+  'Среда': 3,
+  'Четверг': 4,
+  'Пятница': 5,
+  'Суббота': 6,
+  'Воскресенье': 7
+};
+
+
+/*
+ * Also support English just in case.
+ */
+const WEEKDAY_ALIASES = {
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+  Sunday: 7,
+
+  'Понедельник': 1,
+  'Вторник': 2,
+  'Среда': 3,
+  'Четверг': 4,
+  'Пятница': 5,
+  'Суббота': 6,
+  'Воскресенье': 7
+};
+
+
+/* ============================================================
+   SEMESTER WEEK CALCULATION
+   ============================================================ */
+
+/*
+ * Calculate academic week from the actual calendar date.
+ *
+ * Example:
+ *
+ * semesterStart = 01.09.2026
+ *
+ * Sep 1-6  -> week 1
+ * Sep 7-13 -> week 2
+ * Sep 14-20 -> week 3
+ *
+ * This is intentionally calendar based.
+ */
+function getAcademicWeek(date, semesterStart) {
+  if (!date || !semesterStart) {
+    return 1;
+  }
+
+  const current = cloneDate(date);
+  const start = cloneDate(semesterStart);
+
+  /*
+   * Normalize both dates to midnight.
+   */
+  current.setHours(0, 0, 0, 0);
+  start.setHours(0, 0, 0, 0);
+
+  const diffMs =
+    current.getTime() -
+    start.getTime();
+
+  const diffDays =
+    Math.floor(
+      diffMs / (1000 * 60 * 60 * 24)
+    );
+
+  if (diffDays < 0) {
+    return 1;
+  }
+
+  return Math.floor(diffDays / 7) + 1;
+}
+
+
+/* ============================================================
+   LESSON NORMALIZATION
+   ============================================================ */
+
+function normalizeLesson(lesson, dateKey) {
   if (!lesson || typeof lesson !== 'object') {
     return null;
   }
 
+  const date = parseBsuirDate(
+    dateKey
+  );
+
   return {
     ...lesson,
 
-    subject:
-      lesson.subject ??
-      lesson.subjectName ??
-      lesson.name ??
-      '',
+    /*
+     * Canonical date used by the frontend.
+     */
+    date: dateKey,
 
-    subjectFullName:
-      lesson.subjectFullName ??
-      lesson.subjectName ??
-      lesson.subject ??
-      '',
+    dateKey,
 
-    startLessonTime:
+    /*
+     * Preserve these aliases because different
+     * components may use different names.
+     */
+    lessonDate: dateKey,
+
+    startTime:
       lesson.startLessonTime ??
       lesson.startTime ??
       '',
 
-    endLessonTime:
+    endTime:
       lesson.endLessonTime ??
       lesson.endTime ??
       '',
 
-    lessonTypeAbbrev:
+    type:
       lesson.lessonTypeAbbrev ??
-      lesson.lessonType ??
+      lesson.type ??
       '',
 
-    auditories:
+    room:
       Array.isArray(lesson.auditories)
-        ? lesson.auditories
-        : lesson.auditory
-          ? [lesson.auditory]
-          : [],
+        ? lesson.auditories[0] || ''
+        : lesson.auditory ||
+          lesson.room ||
+          '',
 
-    employees:
-      Array.isArray(lesson.employees)
-        ? lesson.employees
-        : [],
+    subject:
+      lesson.subject ??
+      lesson.subjectName ??
+      '',
 
-    studentGroups:
-      Array.isArray(lesson.studentGroups)
-        ? lesson.studentGroups
-        : [],
+    subjectFullName:
+      lesson.subjectFullName ??
+      lesson.subject ??
+      '',
 
-    numSubgroup:
-      Number.isFinite(Number(lesson.numSubgroup))
-        ? Number(lesson.numSubgroup)
-        : 0,
+    teacher:
+      Array.isArray(lesson.employees) &&
+      lesson.employees.length > 0
+        ? lesson.employees[0]
+        : null,
 
-    weekNumber:
-      Array.isArray(lesson.weekNumber)
-        ? lesson.weekNumber
-        : []
+    weekday:
+      date
+        ? getIsoWeekday(date)
+        : null
   };
 }
 
-/**
- * Normalize an entire schedule object.
- */
-function normalizeScheduleMap(schedules) {
-  const normalized =
-    normalizeSchedules(schedules);
 
+/* ============================================================
+   EXPAND BSUIR nextSchedules
+   ============================================================ */
+
+/*
+ * THIS IS THE IMPORTANT FIX.
+ *
+ * BSUIR gives us:
+ *
+ * nextSchedules: {
+ *   "Понедельник": [
+ *      {
+ *        startLessonDate: "07.09.2026",
+ *        endLessonDate: "28.12.2026",
+ *        weekNumber: [1,2,4],
+ *        ...
+ *      }
+ *   ]
+ * }
+ *
+ * That is a recurring timetable template.
+ *
+ * The frontend needs concrete dates:
+ *
+ * schedules["2026-09-07"]
+ * schedules["2026-09-14"]
+ * schedules["2026-09-21"]
+ * ...
+ */
+function expandNextSchedules(
+  nextSchedules,
+  semesterStart,
+  semesterEnd
+) {
   const result = {};
 
-  Object.entries(normalized).forEach(
-    ([day, lessons]) => {
-      result[day] = lessons
-        .map(normalizeLesson)
-        .filter(Boolean);
+  if (
+    !nextSchedules ||
+    typeof nextSchedules !== 'object'
+  ) {
+    return result;
+  }
+
+  Object.entries(nextSchedules).forEach(
+    ([weekdayName, lessons]) => {
+      if (!Array.isArray(lessons)) {
+        return;
+      }
+
+      const weekday =
+        WEEKDAY_ALIASES[weekdayName] ??
+        WEEKDAY_TO_ISO[weekdayName];
+
+      if (!weekday) {
+        console.warn(
+          'Unknown BSUIR weekday:',
+          weekdayName
+        );
+
+        return;
+      }
+
+      lessons.forEach((lesson) => {
+        /*
+         * Each individual lesson may have its own
+         * start/end date.
+         */
+        const lessonStart =
+          parseBsuirDate(
+            lesson.startLessonDate
+          ) ||
+          semesterStart;
+
+        const lessonEnd =
+          parseBsuirDate(
+            lesson.endLessonDate
+          ) ||
+          semesterEnd;
+
+        if (!lessonStart || !lessonEnd) {
+          return;
+        }
+
+        /*
+         * Do not allow a lesson to generate
+         * dates outside the semester.
+         */
+        let startDate = cloneDate(
+          lessonStart
+        );
+
+        let endDate = cloneDate(
+          lessonEnd
+        );
+
+        if (semesterStart) {
+          if (
+            startDate.getTime() <
+            semesterStart.getTime()
+          ) {
+            startDate =
+              cloneDate(semesterStart);
+          }
+        }
+
+        if (semesterEnd) {
+          if (
+            endDate.getTime() >
+            semesterEnd.getTime()
+          ) {
+            endDate =
+              cloneDate(semesterEnd);
+          }
+        }
+
+        /*
+         * Move to the first occurrence of this
+         * weekday.
+         */
+        while (
+          startDate <= endDate &&
+          getIsoWeekday(startDate) !== weekday
+        ) {
+          startDate =
+            addDays(startDate, 1);
+        }
+
+        /*
+         * Generate every matching calendar date.
+         */
+        let currentDate =
+          cloneDate(startDate);
+
+        while (
+          currentDate <= endDate
+        ) {
+          /*
+           * Academic week is determined from
+           * the semester start.
+           */
+          const academicWeek =
+            getAcademicWeek(
+              currentDate,
+              semesterStart
+            );
+
+          /*
+           * BSUIR lesson has weekNumber:
+           *
+           * [1, 3]
+           *
+           * or:
+           *
+           * [1, 2, 3, 4]
+           *
+           * A lesson should only appear when
+           * its academic week matches.
+           */
+          const lessonWeeks =
+            Array.isArray(
+              lesson.weekNumber
+            )
+              ? lesson.weekNumber
+              : [];
+
+          const matchesWeek =
+            lessonWeeks.length === 0 ||
+            lessonWeeks.includes(
+              academicWeek
+            );
+
+          if (matchesWeek) {
+            const dateKey =
+              formatDateKey(
+                currentDate
+              );
+
+            if (dateKey) {
+              if (!result[dateKey]) {
+                result[dateKey] = [];
+              }
+
+              const normalizedLesson =
+                normalizeLesson(
+                  {
+                    ...lesson,
+
+                    /*
+                     * Make the generated
+                     * academic week explicit.
+                     */
+                    academicWeek,
+
+                    /*
+                     * Keep the original weekday.
+                     */
+                    weekdayName,
+
+                    /*
+                     * This helps ScheduleView
+                     * identify the actual date.
+                     */
+                    generatedFromRecurringSchedule:
+                      true
+                  },
+                  dateKey
+                );
+
+              if (normalizedLesson) {
+                result[dateKey].push(
+                  normalizedLesson
+                );
+              }
+            }
+          }
+
+          /*
+           * Next same weekday.
+           */
+          currentDate =
+            addDays(currentDate, 7);
+        }
+      });
+    }
+  );
+
+  /*
+   * Sort every day's lessons by start time.
+   */
+  Object.keys(result).forEach(
+    (dateKey) => {
+      result[dateKey].sort(
+        (a, b) => {
+          const aTime =
+            a.startTime || '';
+
+          const bTime =
+            b.startTime || '';
+
+          return aTime.localeCompare(
+            bTime
+          );
+        }
+      );
     }
   );
 
   return result;
 }
 
-/**
- * Get all lessons from a schedule map.
- */
-function flattenSchedules(schedules) {
-  if (
-    !schedules ||
-    typeof schedules !== 'object'
-  ) {
+
+/* ============================================================
+   TODAY
+   ============================================================ */
+
+function getTodaySchedules(
+  schedules,
+  date = new Date()
+) {
+  const todayKey =
+    formatDateKey(date);
+
+  if (!todayKey) {
     return [];
   }
 
-  return Object.values(schedules).flatMap(
-    (lessons) =>
-      Array.isArray(lessons)
-        ? lessons
-        : []
-  );
-}
-
-/**
- * Calculate today's weekday in Russian.
- *
- * BSUIR's API uses:
- *
- * Понедельник
- * Вторник
- * Среда
- * Четверг
- * Пятница
- * Суббота
- * Воскресенье
- */
-function getTodayRussianDay() {
-  const days = [
-    'Воскресенье',
-    'Понедельник',
-    'Вторник',
-    'Среда',
-    'Четверг',
-    'Пятница',
-    'Суббота'
-  ];
-
-  return days[new Date().getDay()];
-}
-
-/**
- * Build today's schedule from the normalized schedule map.
- */
-function buildTodaySchedule(schedules) {
-  const today = getTodayRussianDay();
-
-  const lessons =
-    schedules?.[today];
-
-  return Array.isArray(lessons)
-    ? lessons
+  return Array.isArray(
+    schedules?.[todayKey]
+  )
+    ? schedules[todayKey]
     : [];
 }
 
-/**
- * Select the next lesson.
- *
- * We first prefer today's lessons. If today's schedule is empty,
- * we simply return null rather than inventing a lesson from another
- * day.
+
+/* ============================================================
+   NEXT LESSON
+   ============================================================ */
+
+/*
+ * Find the next actual calendar lesson,
+ * not simply the first item in todaySchedules.
  */
-function findNextLesson(todaySchedules) {
+function findNextLesson(
+  schedules,
+  fromDate = new Date()
+) {
   if (
-    !Array.isArray(todaySchedules) ||
-    todaySchedules.length === 0
+    !schedules ||
+    typeof schedules !== 'object'
   ) {
     return null;
   }
 
   const now = new Date();
 
-  const currentMinutes =
-    now.getHours() * 60 +
-    now.getMinutes();
+  const startKey =
+    formatDateKey(fromDate);
 
-  const upcoming =
-    todaySchedules
-      .map((lesson) => {
-        const time =
-          lesson?.startLessonTime;
-
-        if (
-          typeof time !== 'string' ||
-          !time.includes(':')
-        ) {
-          return {
-            lesson,
-            minutes: Number.MAX_SAFE_INTEGER
-          };
-        }
-
-        const [
-          hours,
-          minutes
-        ] = time
-          .split(':')
-          .map(Number);
-
-        if (
-          !Number.isFinite(hours) ||
-          !Number.isFinite(minutes)
-        ) {
-          return {
-            lesson,
-            minutes: Number.MAX_SAFE_INTEGER
-          };
-        }
-
-        return {
-          lesson,
-          minutes:
-            hours * 60 + minutes
-        };
-      })
+  const dates =
+    Object.keys(schedules)
       .filter(
-        ({ minutes }) =>
-          minutes >= currentMinutes
+        (key) =>
+          key >= startKey
       )
-      .sort(
-        (a, b) =>
-          a.minutes - b.minutes
-      );
+      .sort();
 
-  return (
-    upcoming[0]?.lesson ??
-    null
-  );
+  for (const dateKey of dates) {
+    const lessons =
+      Array.isArray(
+        schedules[dateKey]
+      )
+        ? schedules[dateKey]
+        : [];
+
+    if (lessons.length === 0) {
+      continue;
+    }
+
+    /*
+     * For today, try to find the next lesson
+     * based on its start time.
+     */
+    if (
+      dateKey ===
+      formatDateKey(now)
+    ) {
+      for (const lesson of lessons) {
+        if (!lesson.startTime) {
+          return lesson;
+        }
+
+        const parts =
+          lesson.startTime.split(':');
+
+        const hours =
+          Number(parts[0]);
+
+        const minutes =
+          Number(parts[1]);
+
+        if (
+          Number.isFinite(hours) &&
+          Number.isFinite(minutes)
+        ) {
+          const lessonStart =
+            new Date(now);
+
+          lessonStart.setHours(
+            hours,
+            minutes,
+            0,
+            0
+          );
+
+          if (
+            lessonStart >= now
+          ) {
+            return lesson;
+          }
+        } else {
+          return lesson;
+        }
+      }
+
+      /*
+       * Nothing later today.
+       */
+      continue;
+    }
+
+    /*
+     * First lesson on a future date.
+     */
+    return lessons[0];
+  }
+
+  return null;
 }
 
-/*
- * ============================================================
- * MAIN NORMALIZER
- * ============================================================
- *
- * IMPORTANT:
- *
- * Your actual BSUIR response is:
- *
- * data: {
- *   schedules: null,
- *   nextSchedules: {
- *      Понедельник: [...],
- *      Вторник: [...],
- *      ...
- *   }
- * }
- *
- * The previous App.jsx only looked at:
- *
- * data.schedules
- *
- * which is null.
- *
- * Therefore it converted a perfectly valid timetable into {}.
- *
- * This version explicitly falls back to:
- *
- * data.nextSchedules
- *
- * when data.schedules is empty/null.
- */
 
-function normalizeScheduleData(data) {
+/* ============================================================
+   NORMALIZE COMPLETE API RESPONSE
+   ============================================================ */
+
+function normalizeScheduleData(
+  data
+) {
   if (
     !data ||
     typeof data !== 'object'
@@ -374,130 +760,188 @@ function normalizeScheduleData(data) {
   }
 
   /*
-   * ----------------------------------------------------------
-   * Determine the actual schedule source.
-   * ----------------------------------------------------------
+   * If this is the wrapper response:
+   *
+   * {
+   *   success: true,
+   *   data: {...}
+   * }
+   *
+   * accept it.
    */
+  const source =
+    data.data &&
+    typeof data.data === 'object'
+      ? data.data
+      : data;
 
-  const rawSchedules =
-    hasScheduleEntries(data.schedules)
-      ? data.schedules
-      : hasScheduleEntries(data.nextSchedules)
-        ? data.nextSchedules
-        : {};
+  const raw =
+    source.rawSchedule ||
+    source.raw ||
+    source;
 
-  const schedules =
-    normalizeScheduleMap(
-      rawSchedules
+  /*
+   * Student group.
+   */
+  const studentGroup =
+    source.studentGroup ??
+    source.student ??
+    raw.studentGroupDto?.name ??
+    null;
+
+  /*
+   * Semester dates.
+   *
+   * The debug payload you supplied has:
+   *
+   * startDate: 01.09.2026
+   * endDate: 28.12.2026
+   */
+  const semesterStart =
+    parseBsuirDate(
+      source.startDate ??
+      raw.startDate ??
+      source.semesterStart
+    );
+
+  const semesterEnd =
+    parseBsuirDate(
+      source.endDate ??
+      raw.endDate ??
+      source.semesterEnd
     );
 
   /*
    * ----------------------------------------------------------
-   * Student group
+   * NEW BSUIR FORMAT
    * ----------------------------------------------------------
+   *
+   * schedules: null
+   * nextSchedules: {...}
+   *
+   * Use nextSchedules.
    */
-
-  let studentGroup =
-    data.studentGroup ??
-    data.student ??
+  const nextSchedules =
+    source.nextSchedules ??
+    raw.nextSchedules ??
     null;
 
   /*
-   * If the backend didn't expose studentGroup directly,
-   * recover it from the first lesson.
+   * Expand recurring BSUIR lessons
+   * into actual dates.
    */
+  let schedules = {};
 
-  if (!studentGroup) {
-    const allLessons =
-      flattenSchedules(schedules);
-
-    const firstLesson =
-      allLessons[0];
-
-    const firstGroup =
-      firstLesson?.studentGroups?.[0];
-
-    if (firstGroup?.name) {
-      studentGroup =
-        firstGroup.name;
-    }
-  }
-
-  /*
-   * ----------------------------------------------------------
-   * Today's schedule
-   * ----------------------------------------------------------
-   */
-
-  let todaySchedules =
-    Array.isArray(data.todaySchedules)
-      ? data.todaySchedules
-      : Array.isArray(data.todaySchedule)
-        ? data.todaySchedule
-        : null;
-
-  if (!todaySchedules) {
-    todaySchedules =
-      buildTodaySchedule(
-        schedules
+  if (
+    nextSchedules &&
+    typeof nextSchedules === 'object'
+  ) {
+    schedules =
+      expandNextSchedules(
+        nextSchedules,
+        semesterStart,
+        semesterEnd
       );
   }
 
-  todaySchedules =
-    todaySchedules
-      .map(normalizeLesson)
-      .filter(Boolean);
-
   /*
    * ----------------------------------------------------------
-   * Exams
+   * OLD FORMAT SUPPORT
    * ----------------------------------------------------------
+   *
+   * If an older backend already gives
+   * date-keyed schedules, preserve them.
    */
-
-  const exams =
-    Array.isArray(data.exams)
-      ? data.exams
-      : [];
+  if (
+    Object.keys(schedules).length === 0 &&
+    source.schedules &&
+    typeof source.schedules === 'object' &&
+    !Array.isArray(source.schedules)
+  ) {
+    Object.entries(
+      source.schedules
+    ).forEach(
+      ([dateKey, lessons]) => {
+        if (
+          Array.isArray(lessons)
+        ) {
+          schedules[dateKey] =
+            lessons
+              .map((lesson) =>
+                normalizeLesson(
+                  lesson,
+                  dateKey
+                )
+              )
+              .filter(Boolean);
+        }
+      }
+    );
+  }
 
   /*
-   * ----------------------------------------------------------
-   * Current week
-   * ----------------------------------------------------------
+   * If backend already supplies today's
+   * lessons, we still prefer the date-based
+   * generated value.
    */
+  const todaySchedules =
+    getTodaySchedules(
+      schedules
+    );
 
-  const parsedWeek =
-    Number(data.currentWeek);
-
+  /*
+   * Current academic week.
+   *
+   * Prefer backend value when valid,
+   * otherwise calculate it.
+   */
   const currentWeek =
-    Number.isFinite(parsedWeek) &&
-    parsedWeek > 0
-      ? parsedWeek
-      : 1;
-
-  /*
-   * ----------------------------------------------------------
-   * Next lesson
-   * ----------------------------------------------------------
-   */
-
-  const nextLesson =
-    data.nextLesson
-      ? normalizeLesson(
-          data.nextLesson
+    Number(
+      source.currentWeek ??
+      data.currentWeek
+    ) > 0
+      ? Number(
+          source.currentWeek ??
+          data.currentWeek
         )
-      : findNextLesson(
-          todaySchedules
-        );
+      : semesterStart
+        ? getAcademicWeek(
+            new Date(),
+            semesterStart
+          )
+        : 1;
 
   /*
-   * ----------------------------------------------------------
-   * Return normalized object
-   * ----------------------------------------------------------
+   * Next actual calendar lesson.
    */
+  const nextLesson =
+    findNextLesson(
+      schedules
+    );
+
+  /*
+   * Keep backend status flags.
+   */
+  const cached =
+    Boolean(
+      data.cached ??
+      source.cached
+    );
+
+  const fallback =
+    Boolean(
+      data.fallback ??
+      source.fallback
+    );
+
+  const stale =
+    Boolean(
+      data.stale ??
+      source.stale
+    );
 
   return {
     ...EMPTY_DATA,
-    ...data,
 
     studentGroup,
 
@@ -505,31 +949,49 @@ function normalizeScheduleData(data) {
 
     todaySchedules,
 
-    exams,
+    exams:
+      Array.isArray(
+        source.exams
+      )
+        ? source.exams
+        : [],
 
     currentWeek,
 
     nextLesson,
 
-    cached:
-      Boolean(data.cached),
-
-    fallback:
-      Boolean(data.fallback),
-
-    stale:
-      Boolean(data.stale),
+    cached,
+    fallback,
+    stale,
 
     debug:
-      data.debug ?? null
+      data.debug ??
+      source.debug ??
+      null,
+
+    rawSchedule:
+      raw,
+
+    semesterStart:
+      semesterStart
+        ? formatDateKey(
+            semesterStart
+          )
+        : null,
+
+    semesterEnd:
+      semesterEnd
+        ? formatDateKey(
+            semesterEnd
+          )
+        : null
   };
 }
 
-/*
- * ============================================================
- * API STATUS
- * ============================================================
- */
+
+/* ============================================================
+   API STATUS
+   ============================================================ */
 
 function getApiStatus(json) {
   if (
@@ -543,9 +1005,6 @@ function getApiStatus(json) {
     };
   }
 
-  /*
-   * Backend explicitly says fallback.
-   */
   if (
     json.fallback === true
   ) {
@@ -556,9 +1015,6 @@ function getApiStatus(json) {
     };
   }
 
-  /*
-   * Backend explicitly says cached.
-   */
   if (
     json.cached === true
   ) {
@@ -569,9 +1025,6 @@ function getApiStatus(json) {
     };
   }
 
-  /*
-   * Backend explicitly says stale.
-   */
   if (
     json.stale === true
   ) {
@@ -582,21 +1035,16 @@ function getApiStatus(json) {
     };
   }
 
-  /*
-   * A successful response is live even if schedules came from
-   * `nextSchedules`.
-   */
   return {
     state: 'live',
     message: null
   };
 }
 
-/*
- * ============================================================
- * APP CONTENT
- * ============================================================
- */
+
+/* ============================================================
+   APP CONTENT
+   ============================================================ */
 
 function AppContent() {
   const {
@@ -608,12 +1056,6 @@ function AppContent() {
   const isOffline =
     useOffline();
 
-  /*
-   * ----------------------------------------------------------
-   * Navigation
-   * ----------------------------------------------------------
-   */
-
   const [
     activeTab,
     setActiveTab
@@ -623,12 +1065,6 @@ function AppContent() {
     selectedLesson,
     setSelectedLesson
   ] = useState(null);
-
-  /*
-   * ----------------------------------------------------------
-   * Onboarding
-   * ----------------------------------------------------------
-   */
 
   const [
     isOnboarded,
@@ -640,20 +1076,6 @@ function AppContent() {
       ) === 'true'
   );
 
-  /*
-   * ----------------------------------------------------------
-   * Group
-   * ----------------------------------------------------------
-   *
-   * IMPORTANT:
-   *
-   * Your real group is 373901.
-   *
-   * We keep 150501 only as a legacy fallback for users who have
-   * never selected a group. If onboarding has already saved 373901,
-   * it will always win.
-   */
-
   const [
     group,
     setGroup
@@ -661,14 +1083,8 @@ function AppContent() {
     () =>
       localStorage.getItem(
         'sh_group'
-      ) || '150501'
+      ) || '373901'
   );
-
-  /*
-   * ----------------------------------------------------------
-   * Subgroup
-   * ----------------------------------------------------------
-   */
 
   const [
     subgroup,
@@ -682,12 +1098,6 @@ function AppContent() {
       ) || 1
   );
 
-  /*
-   * ----------------------------------------------------------
-   * Theme
-   * ----------------------------------------------------------
-   */
-
   const [
     themeMode,
     setThemeMode
@@ -697,12 +1107,6 @@ function AppContent() {
         'sh_theme'
       ) || 'system'
   );
-
-  /*
-   * ----------------------------------------------------------
-   * Loading / API state
-   * ----------------------------------------------------------
-   */
 
   const [
     loading,
@@ -720,11 +1124,8 @@ function AppContent() {
   ] = useState('loading');
 
   /*
-   * ----------------------------------------------------------
-   * Cached schedule
-   * ----------------------------------------------------------
+   * Load cached schedule.
    */
-
   const [
     scheduleData,
     setScheduleData
@@ -759,12 +1160,6 @@ function AppContent() {
     }
   });
 
-  /*
-   * ----------------------------------------------------------
-   * Last updated
-   * ----------------------------------------------------------
-   */
-
   const [
     lastUpdated,
     setLastUpdated
@@ -775,11 +1170,10 @@ function AppContent() {
       ) || null
   );
 
-  /*
-   * ==========================================================
-   * THEME
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     THEME
+     ========================================================== */
 
   useEffect(() => {
     const root =
@@ -803,45 +1197,40 @@ function AppContent() {
     colorScheme
   ]);
 
-  /*
-   * ==========================================================
-   * FETCH SCHEDULE
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     FETCH SCHEDULE
+     ========================================================== */
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchSchedule() {
-      /*
-       * --------------------------------------------------------
-       * Validate group
-       * --------------------------------------------------------
-       */
+      const normalizedGroup =
+        String(
+          group || ''
+        ).trim();
 
-      if (!group) {
+      if (!normalizedGroup) {
         setLoading(false);
         setApiState('error');
         setApiError(
           'No student group has been selected.'
         );
+
         return;
       }
-
-      /*
-       * --------------------------------------------------------
-       * Offline
-       * --------------------------------------------------------
-       */
 
       if (isOffline) {
         if (!cancelled) {
           setLoading(false);
 
           const hasCachedSchedule =
-            hasScheduleEntries(
-              scheduleData?.schedules
-            );
+            scheduleData &&
+            scheduleData.schedules &&
+            Object.keys(
+              scheduleData.schedules
+            ).length > 0;
 
           setApiState(
             hasCachedSchedule
@@ -859,20 +1248,18 @@ function AppContent() {
         return;
       }
 
-      /*
-       * --------------------------------------------------------
-       * Start request
-       * --------------------------------------------------------
-       */
-
       try {
         setLoading(true);
         setApiError(null);
         setApiState('loading');
 
+        /*
+         * Group is encoded so this also works
+         * with other group numbers.
+         */
         const endpoint =
           `/api/bsuir/schedule?group=${encodeURIComponent(
-            group
+            normalizedGroup
           )}`;
 
         const res =
@@ -886,12 +1273,6 @@ function AppContent() {
             }
           );
 
-        /*
-         * ------------------------------------------------------
-         * Parse JSON even for HTTP errors.
-         * ------------------------------------------------------
-         */
-
         let json = null;
 
         try {
@@ -902,11 +1283,18 @@ function AppContent() {
         }
 
         /*
-         * ------------------------------------------------------
-         * HTTP error
-         * ------------------------------------------------------
+         * IMPORTANT:
+         *
+         * Do not reject a response merely because
+         * schedules is null.
+         *
+         * Your new BSUIR response has:
+         *
+         * schedules: null
+         * nextSchedules: {...}
+         *
+         * That is valid.
          */
-
         if (!res.ok) {
           const serverMessage =
             json?.error ||
@@ -918,12 +1306,6 @@ function AppContent() {
           );
         }
 
-        /*
-         * ------------------------------------------------------
-         * Validate response.
-         * ------------------------------------------------------
-         */
-
         if (
           !json ||
           json.success !== true ||
@@ -931,7 +1313,7 @@ function AppContent() {
         ) {
           throw new Error(
             json?.error ||
-              'The schedule server returned no timetable data.'
+            'The schedule server returned no timetable data.'
           );
         }
 
@@ -940,56 +1322,53 @@ function AppContent() {
         }
 
         /*
-         * ------------------------------------------------------
-         * NORMALIZE THE IMPORTANT PART
-         * ------------------------------------------------------
-         *
-         * This is where the original bug was.
-         *
-         * BSUIR response:
-         *
-         * data.schedules = null
-         * data.nextSchedules = { ...actual timetable... }
-         *
-         * normalizeScheduleData() now correctly uses
-         * nextSchedules when schedules is empty.
+         * THIS now expands nextSchedules
+         * into real calendar dates.
          */
-
         const normalizedData =
           normalizeScheduleData(
-            json.data
+            json
           );
 
         const status =
           getApiStatus(json);
 
         /*
-         * ------------------------------------------------------
-         * Determine whether timetable actually exists.
-         * ------------------------------------------------------
+         * We consider the response usable
+         * when either:
+         *
+         * 1. actual date schedules exist
+         * 2. exams exist
+         * 3. backend supplied nextSchedules
          */
-
         const hasSchedule =
-          hasScheduleEntries(
-            normalizedData.schedules
-          );
+          Object.keys(
+            normalizedData.schedules || {}
+          ).length > 0;
+
+        const hasRecurringSchedule =
+          json.data?.nextSchedules &&
+          Object.keys(
+            json.data.nextSchedules
+          ).length > 0;
+
+        const hasAnyTimetableData =
+          hasSchedule ||
+          hasRecurringSchedule ||
+          normalizedData.exams.length >
+            0;
 
         /*
-         * ------------------------------------------------------
-         * Store normalized schedule.
-         * ------------------------------------------------------
+         * Store complete normalized data.
          */
-
         setScheduleData(
           normalizedData
         );
 
         /*
-         * ------------------------------------------------------
-         * Cache complete normalized response.
-         * ------------------------------------------------------
+         * Cache the normalized,
+         * date-based representation.
          */
-
         try {
           localStorage.setItem(
             'sh_cached_schedule',
@@ -997,7 +1376,9 @@ function AppContent() {
               normalizedData
             )
           );
-        } catch (storageError) {
+        } catch (
+          storageError
+        ) {
           console.error(
             'Failed to cache schedule:',
             storageError
@@ -1005,23 +1386,27 @@ function AppContent() {
         }
 
         /*
-         * ------------------------------------------------------
-         * Update timestamp only when actual timetable exists.
-         * ------------------------------------------------------
+         * Update timestamp whenever
+         * we got a successful timetable response.
          */
-
-        if (hasSchedule) {
+        if (
+          hasAnyTimetableData
+        ) {
           const now =
             new Date().toISOString();
 
-          setLastUpdated(now);
+          setLastUpdated(
+            now
+          );
 
           try {
             localStorage.setItem(
               'sh_cache_timestamp',
               now
             );
-          } catch (storageError) {
+          } catch (
+            storageError
+          ) {
             console.error(
               'Failed to cache timestamp:',
               storageError
@@ -1029,21 +1414,9 @@ function AppContent() {
           }
         }
 
-        /*
-         * ------------------------------------------------------
-         * API state
-         * ------------------------------------------------------
-         */
-
         setApiState(
           status.state
         );
-
-        /*
-         * A live response with `nextSchedules` is still valid.
-         *
-         * Do NOT show "No timetable entries were returned".
-         */
 
         if (
           status.state === 'live'
@@ -1064,18 +1437,16 @@ function AppContent() {
           error
         );
 
-        setApiState('error');
-
-        /*
-         * ------------------------------------------------------
-         * Preserve existing schedule.
-         * ------------------------------------------------------
-         */
+        setApiState(
+          'error'
+        );
 
         const hasExistingSchedule =
-          hasScheduleEntries(
-            scheduleData?.schedules
-          );
+          scheduleData &&
+          scheduleData.schedules &&
+          Object.keys(
+            scheduleData.schedules
+          ).length > 0;
 
         if (
           hasExistingSchedule
@@ -1086,7 +1457,7 @@ function AppContent() {
         } else {
           setApiError(
             error?.message ||
-              'Unable to load the academic timetable.'
+            'Unable to load the academic timetable.'
           );
         }
       } finally {
@@ -1106,11 +1477,10 @@ function AppContent() {
     isOffline
   ]);
 
-  /*
-   * ==========================================================
-   * ONBOARDING
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     ONBOARDING
+     ========================================================== */
 
   const handleOnboardingComplete = (
     newGroup,
@@ -1129,10 +1499,6 @@ function AppContent() {
       Number(
         newSubgroup
       ) || 1;
-
-    /*
-     * Save group.
-     */
 
     setGroup(
       normalizedGroup
@@ -1164,14 +1530,15 @@ function AppContent() {
     );
 
     /*
-     * Clear old group's schedule.
+     * Clear previous group's schedule.
      */
-
     setScheduleData({
       ...EMPTY_DATA
     });
 
-    setLastUpdated(null);
+    setLastUpdated(
+      null
+    );
 
     try {
       localStorage.removeItem(
@@ -1189,11 +1556,10 @@ function AppContent() {
     }
   };
 
-  /*
-   * ==========================================================
-   * NAVIGATION
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     NAVIGATION
+     ========================================================== */
 
   const handleTabChange = (
     tab
@@ -1207,11 +1573,10 @@ function AppContent() {
     );
   };
 
-  /*
-   * ==========================================================
-   * ONBOARDING SCREEN
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     ONBOARDING SCREEN
+     ========================================================== */
 
   if (!isOnboarded) {
     return (
@@ -1225,11 +1590,10 @@ function AppContent() {
     );
   }
 
-  /*
-   * ==========================================================
-   * NORMALIZED DATA FOR VIEWS
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     CONSUMER DATA
+     ========================================================== */
 
   const student =
     scheduleData?.studentGroup ||
@@ -1247,10 +1611,27 @@ function AppContent() {
       : [];
 
   /*
-   * ==========================================================
-   * GREETING
-   * ==========================================================
+   * Recalculate today's lessons directly
+   * from the date-based schedule.
+   *
+   * This prevents stale todaySchedules
+   * after midnight.
    */
+  const actualTodaySchedule =
+    getTodaySchedules(
+      scheduleData?.schedules
+    );
+
+  const effectiveTodaySchedule =
+    actualTodaySchedule.length > 0 ||
+    todaySchedule.length === 0
+      ? actualTodaySchedule
+      : todaySchedule;
+
+
+  /* ==========================================================
+     GREETING
+     ========================================================== */
 
   const hour =
     new Date().getHours();
@@ -1296,53 +1677,54 @@ function AppContent() {
       '🌙';
   }
 
-  /*
-   * ----------------------------------------------------------
-   * Display name
-   * ----------------------------------------------------------
-   */
+
+  /* ==========================================================
+     DISPLAY NAME
+     ========================================================== */
 
   const displayName =
     user?.first_name ||
     (
-      typeof student === 'object'
+      typeof student ===
+      'object'
         ? student?.name
         : student
     ) ||
-    'Unknown Student';
+    'Student';
 
-  /*
-   * ==========================================================
-   * STATUS
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     STATUS
+     ========================================================== */
 
   const statusState =
     isOffline
       ? 'offline'
-      : apiState === 'live'
+      : apiState ===
+        'live'
         ? 'live'
-        : apiState === 'cached' ||
-            apiState === 'stale' ||
-            apiState === 'fallback'
+        : apiState ===
+            'cached' ||
+          apiState ===
+            'stale' ||
+          apiState ===
+            'fallback'
           ? 'cached'
           : 'error';
 
-  /*
-   * ==========================================================
-   * WEEK
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     WEEK
+     ========================================================== */
 
   const weekNumber =
     scheduleData?.currentWeek ||
     1;
 
-  /*
-   * ==========================================================
-   * HEADER
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     GREETING TEXT
+     ========================================================== */
 
   const greetingText =
     `${greeting}, ${displayName}`;
@@ -1354,13 +1736,14 @@ function AppContent() {
         ? 'text-2xl'
         : 'text-[32px]';
 
-  /*
-   * ==========================================================
-   * SUBJECT DETAILS
-   * ==========================================================
-   */
 
-  if (selectedLesson) {
+  /* ==========================================================
+     SUBJECT DETAILS
+     ========================================================== */
+
+  if (
+    selectedLesson
+  ) {
     return (
       <div className="max-w-[440px] mx-auto px-4 pt-5 pb-10">
         <SubjectDetailsView
@@ -1377,17 +1760,16 @@ function AppContent() {
     );
   }
 
-  /*
-   * ==========================================================
-   * MAIN APP
-   * ==========================================================
-   */
+
+  /* ==========================================================
+     MAIN APPLICATION
+     ========================================================== */
 
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
 
       {/* ======================================================
-          APP HEADER
+          HEADER
           ====================================================== */}
 
       <header className="mb-6">
@@ -1400,11 +1782,14 @@ function AppContent() {
         </h1>
 
         <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
-          Группа: {group} • Подгруппа:{' '}
-          {subgroup} • Неделя:{' '}
-          {weekNumber}
+          Группа: {group}
+          {' • '}
+          Подгруппа: {subgroup}
+          {' • '}
+          Неделя: {weekNumber}
         </p>
       </header>
+
 
       {/* ======================================================
           API / OFFLINE STATUS
@@ -1414,24 +1799,32 @@ function AppContent() {
         <div className="mb-4 rounded-2xl p-3 bg-[#f59e0b]/10 border border-[#f59e0b]/20 flex items-center gap-3 text-xs text-[#f59e0b]">
 
           <span>
-            {isOffline
-              ? '📴'
-              : apiState === 'cached'
-                ? '🗄️'
-                : apiState === 'fallback'
-                  ? '⚠️'
-                  : '⚠️'}
+            {apiState ===
+            'live'
+              ? '✓'
+              : isOffline
+                ? '📴'
+                : apiState ===
+                    'cached'
+                  ? '🗄️'
+                  : apiState ===
+                      'fallback'
+                    ? '⚠️'
+                    : '⚠️'}
           </span>
 
           <div>
             <strong className="block font-bold">
               {isOffline
                 ? 'Offline Mode'
-                : apiState === 'cached'
+                : apiState ===
+                    'cached'
                   ? 'Cached Timetable'
-                  : apiState === 'fallback'
+                  : apiState ===
+                      'fallback'
                     ? 'BSUIR Data Unavailable'
-                    : apiState === 'error'
+                    : apiState ===
+                        'error'
                       ? 'Schedule Loading Error'
                       : 'Schedule Status'}
             </strong>
@@ -1443,6 +1836,7 @@ function AppContent() {
         </div>
       )}
 
+
       {/* ======================================================
           MAIN
           ====================================================== */}
@@ -1450,12 +1844,14 @@ function AppContent() {
       <main>
 
         {/* HOME */}
-        {activeTab === 'home' && (
+        {activeTab ===
+          'home' && (
           <HomeView
             scheduleData={{
               student,
               nextLesson,
-              todaySchedule
+              todaySchedule:
+                effectiveTodaySchedule
             }}
             status={
               statusState
@@ -1466,8 +1862,10 @@ function AppContent() {
           />
         )}
 
+
         {/* SCHEDULE */}
-        {activeTab === 'schedule' && (
+        {activeTab ===
+          'schedule' && (
           <ScheduleView
             scheduleData={
               scheduleData
@@ -1484,59 +1882,76 @@ function AppContent() {
           />
         )}
 
+
         {/* TEACHERS */}
-        {activeTab === 'teachers' && (
+        {activeTab ===
+          'teachers' && (
           <TeachersView />
         )}
 
+
         {/* EXAMS */}
-        {activeTab === 'exams' && (
+        {activeTab ===
+          'exams' && (
           <ExamsView />
         )}
 
+
         {/* SETTINGS */}
-        {activeTab === 'settings' && (
+        {activeTab ===
+          'settings' && (
           <SettingsView
-            group={group}
-            setGroup={(
-              newGroup
-            ) => {
-              const normalizedGroup =
-                String(
-                  newGroup || ''
-                ).trim();
+            group={
+              group
+            }
 
-              setGroup(
-                normalizedGroup
-              );
+            setGroup={
+              (
+                newGroup
+              ) => {
+                const normalizedGroup =
+                  String(
+                    newGroup ||
+                    ''
+                  ).trim();
 
-              localStorage.setItem(
-                'sh_group',
-                normalizedGroup
-              );
-            }}
+                setGroup(
+                  normalizedGroup
+                );
+
+                localStorage.setItem(
+                  'sh_group',
+                  normalizedGroup
+                );
+              }
+            }
+
             themeMode={
               themeMode
             }
-            setThemeMode={(
-              newTheme
-            ) => {
-              setThemeMode(
-                newTheme
-              );
 
-              localStorage.setItem(
-                'sh_theme',
+            setThemeMode={
+              (
                 newTheme
-              );
-            }}
+              ) => {
+                setThemeMode(
+                  newTheme
+                );
+
+                localStorage.setItem(
+                  'sh_theme',
+                  newTheme
+                );
+              }
+            }
           />
         )}
 
       </main>
 
+
       {/* ======================================================
-          FLOATING NAVIGATION
+          FLOATING NAV
           ====================================================== */}
 
       <FloatingNav
@@ -1552,11 +1967,10 @@ function AppContent() {
   );
 }
 
-/*
- * ============================================================
- * ROOT APP
- * ============================================================
- */
+
+/* ============================================================
+   APP
+   ============================================================ */
 
 export default function App() {
   return (
