@@ -126,6 +126,7 @@ export default async function handler(req, res) {
       studentGroup: rawSchedule.studentGroupDto?.name || group,
       schedules: rawSchedule.schedules || {},
       todaySchedules: todayLessons,
+      exams: rawSchedule.exams || [],
       nextLesson: nextLesson
     }
   });
