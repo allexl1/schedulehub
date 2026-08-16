@@ -10,7 +10,7 @@ import {
 
 import { resolveLessonsForDate } from '../utils/scheduleResolver';
 
-const WEEKDAYS = [
+const DAYS = [
   { key: 1, label: 'Mon' },
   { key: 2, label: 'Tue' },
   { key: 3, label: 'Wed' },
@@ -19,25 +19,26 @@ const WEEKDAYS = [
   { key: 6, label: 'Sat' }
 ];
 
-function startOfWeek(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-
-  d.setDate(d.getDate() + mondayOffset);
-  d.setHours(0, 0, 0, 0);
-
-  return d;
+function addDays(date, amount) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + amount);
+  return result;
 }
 
-function addDays(date, amount) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + amount);
-  return d;
+function startOfWeek(date) {
+  const result = new Date(date);
+  const day = result.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+
+  result.setDate(result.getDate() + offset);
+  result.setHours(0, 0, 0, 0);
+
+  return result;
 }
 
 function sameDate(a, b) {
+  if (!a || !b) return false;
+
   return (
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -60,7 +61,7 @@ function formatFullDate(date) {
   });
 }
 
-function getPersonalDayKey(date) {
+function personalDay(date) {
   const day = date.getDay();
 
   if (day === 1) return 'Mon';
@@ -73,14 +74,24 @@ function getPersonalDayKey(date) {
   return 'Sun';
 }
 
-function getInitialDate() {
+function initialDate() {
   const today = new Date();
 
-  if (today.getDay() === 0) {
-    return addDays(today, -1);
-  }
+  return today.getDay() === 0
+    ? addDays(today, -1)
+    : today;
+}
 
-  return today;
+function getScheduleData(value) {
+  return value?.data || value || {};
+}
+
+function hasLessons(schedules) {
+  return Object.values(schedules || {}).some(
+    value =>
+      Array.isArray(value) &&
+      value.length > 0
+  );
 }
 
 export default function ScheduleView({
@@ -90,40 +101,44 @@ export default function ScheduleView({
   onLessonClick
 }) {
   const [now, setNow] = useState(() => new Date());
-  const [selectedDate, setSelectedDate] = useState(
-    getInitialDate
-  );
+  const [selectedDate, setSelectedDate] =
+    useState(initialDate);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
+  const [isModalOpen, setIsModalOpen] =
+    useState(false);
 
-  const [personalEvents, setPersonalEvents] = useState(() => {
-    try {
-      const saved = localStorage.getItem(
-        'sh_personal_events'
-      );
+  const [editingEvent, setEditingEvent] =
+    useState(null);
 
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [personalEvents, setPersonalEvents] =
+    useState(() => {
+      try {
+        const saved =
+          localStorage.getItem(
+            'sh_personal_events'
+          );
+
+        return saved
+          ? JSON.parse(saved)
+          : [];
+      } catch {
+        return [];
+      }
+    });
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 5000);
+    const timer = setInterval(
+      () => setNow(new Date()),
+      5000
+    );
 
     return () => clearInterval(timer);
   }, []);
 
-  /*
-   * Support both:
-   *
-   * scheduleData.data.schedules
-   * and the older top-level shape.
-   */
-  const data = scheduleData?.data || scheduleData || {};
+  const data = useMemo(
+    () => getScheduleData(scheduleData),
+    [scheduleData]
+  );
 
   const schedules =
     data?.schedules &&
@@ -142,68 +157,69 @@ export default function ScheduleView({
       : 1;
 
   const hasScheduleData =
-    Object.values(schedules).some(
-      value =>
-        Array.isArray(value) &&
-        value.length > 0
-    );
+    hasLessons(schedules);
 
   const weekStart = useMemo(
     () => startOfWeek(selectedDate),
     [selectedDate]
   );
 
-  const weekDates = useMemo(() => {
-    return WEEKDAYS.map(day => ({
-      ...day,
-      date: addDays(weekStart, day.key - 1)
-    }));
-  }, [weekStart]);
+  const weekDates = useMemo(
+    () =>
+      DAYS.map(day => ({
+        ...day,
+        date: addDays(
+          weekStart,
+          day.key - 1
+        )
+      })),
+    [weekStart]
+  );
 
-  const selectedDayKey =
-    getPersonalDayKey(selectedDate);
-
-  const selectedLessons = useMemo(() => {
-    return resolveLessonsForDate(
+  const lessons = useMemo(
+    () =>
+      resolveLessonsForDate(
+        schedules,
+        selectedDate,
+        currentWeek,
+        subgroup,
+        {
+          referenceDate: now
+        }
+      ),
+    [
       schedules,
       selectedDate,
       currentWeek,
-      subgroup
-    );
-  }, [
-    schedules,
-    selectedDate,
-    currentWeek,
-    subgroup
-  ]);
+      subgroup,
+      now
+    ]
+  );
 
-  const selectedPersonalEvents = useMemo(() => {
+  const events = useMemo(() => {
+    const day = personalDay(selectedDate);
+
     return personalEvents.filter(
-      event => event.day === selectedDayKey
+      event => event.day === day
     );
-  }, [
-    personalEvents,
-    selectedDayKey
-  ]);
+  }, [personalEvents, selectedDate]);
 
-  const processedSchedule = useMemo(() => {
+  const schedule = useMemo(() => {
     const combined = [
-      ...selectedLessons,
-      ...selectedPersonalEvents
-    ];
-
-    const sorted = [...combined].sort(
+      ...lessons,
+      ...events
+    ].sort(
       (a, b) =>
         parseStartTimeInMinutes(a.time) -
         parseStartTimeInMinutes(b.time)
     );
 
-    const selectedIsToday =
+    const today =
       sameDate(selectedDate, now);
 
     let nextFound = false;
 
-    return sorted.map(item => {
+    return combined.map(item => {
       if (item.isPersonal) {
         return {
           ...item,
@@ -211,15 +227,13 @@ export default function ScheduleView({
         };
       }
 
-      const rawStatus = getClassStatus(
-        item.time,
-        now
-      );
+      const rawStatus =
+        getClassStatus(item.time, now);
 
       let status = rawStatus;
 
       if (
-        selectedIsToday &&
+        today &&
         rawStatus === 'upcoming' &&
         !nextFound
       ) {
@@ -241,27 +255,33 @@ export default function ScheduleView({
       };
     });
   }, [
-    selectedLessons,
-    selectedPersonalEvents,
+    lessons,
+    events,
     selectedDate,
     now
   ]);
 
-  const selectedExamCount = useMemo(() => {
-    return exams.filter(exam => {
-      if (!exam?.date) return false;
+  const selectedExamCount = useMemo(
+    () =>
+      exams.filter(exam => {
+        if (!exam?.date) return false;
 
-      const examDate = new Date(exam.date);
+        const date = new Date(exam.date);
 
-      return (
-        !Number.isNaN(examDate.getTime()) &&
-        sameDate(examDate, selectedDate)
-      );
-    }).length;
-  }, [exams, selectedDate]);
+        return (
+          !Number.isNaN(date.getTime()) &&
+          sameDate(date, selectedDate)
+        );
+      }).length,
+    [exams, selectedDate]
+  );
 
-  const goToToday = () => {
-    setSelectedDate(getInitialDate());
+  const selectDate = date => {
+    setSelectedDate(new Date(date));
+  };
+
+  const goToday = () => {
+    setSelectedDate(initialDate());
   };
 
   const goPreviousWeek = () => {
@@ -276,33 +296,33 @@ export default function ScheduleView({
     );
   };
 
-  const handleOpenCreateModal = () => {
+  const openCreateModal = () => {
     setEditingEvent(null);
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = event => {
+  const openEditModal = event => {
     setEditingEvent(event);
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
+  const closeModal = () => {
     setIsModalOpen(false);
     setEditingEvent(null);
   };
 
-  const handleSaveEvent = savedEvent => {
+  const saveEvent = event => {
     const exists = personalEvents.some(
-      event => event.id === savedEvent.id
+      item => item.id === event.id
     );
 
     const updated = exists
-      ? personalEvents.map(event =>
-          event.id === savedEvent.id
-            ? savedEvent
-            : event
+      ? personalEvents.map(item =>
+          item.id === event.id
+            ? event
+            : item
         )
-      : [...personalEvents, savedEvent];
+      : [...personalEvents, event];
 
     setPersonalEvents(updated);
 
@@ -319,10 +339,11 @@ export default function ScheduleView({
     }
   };
 
-  const handleDeleteEvent = eventId => {
-    const updated = personalEvents.filter(
-      event => event.id !== eventId
-    );
+  const deleteEvent = eventId => {
+    const updated =
+      personalEvents.filter(
+        event => event.id !== eventId
+      );
 
     setPersonalEvents(updated);
 
@@ -342,7 +363,6 @@ export default function ScheduleView({
   return (
     <div className="space-y-5">
 
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
@@ -355,14 +375,13 @@ export default function ScheduleView({
         </div>
 
         <button
-          onClick={handleOpenCreateModal}
+          onClick={openCreateModal}
           className="text-xs font-bold text-[#2997ff] bg-[#2997ff]/10 px-3 py-1.5 rounded-xl transition-all active:scale-95"
         >
           + Add Event
         </button>
       </div>
 
-      {/* Calendar controls */}
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -374,7 +393,7 @@ export default function ScheduleView({
 
         <button
           type="button"
-          onClick={goToToday}
+          onClick={goToday}
           className="px-3 py-2 rounded-xl bg-[#2997ff]/10 text-[#2997ff] text-xs font-bold"
         >
           Today
@@ -389,13 +408,15 @@ export default function ScheduleView({
         </button>
       </div>
 
-      {/* Calendar week */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {weekDates.map(day => {
-          const isSelected =
-            sameDate(day.date, selectedDate);
+          const selected =
+            sameDate(
+              day.date,
+              selectedDate
+            );
 
-          const isToday =
+          const today =
             sameDate(day.date, now);
 
           return (
@@ -403,10 +424,10 @@ export default function ScheduleView({
               key={day.key}
               type="button"
               onClick={() =>
-                setSelectedDate(day.date)
+                selectDate(day.date)
               }
               className={`flex-1 min-w-[52px] py-2 px-2 rounded-xl text-center transition-all ${
-                isSelected
+                selected
                   ? 'bg-[#2997ff] text-white shadow-sm'
                   : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
               }`}
@@ -419,10 +440,10 @@ export default function ScheduleView({
                 {day.date.getDate()}
               </span>
 
-              {isToday && (
+              {today && (
                 <span
                   className={`block text-[8px] font-medium mt-0.5 ${
-                    isSelected
+                    selected
                       ? 'text-white/80'
                       : 'text-[#2997ff]'
                   }`}
@@ -435,7 +456,6 @@ export default function ScheduleView({
         })}
       </div>
 
-      {/* Date / week information */}
       <div className="flex justify-between items-center px-0.5">
         <div>
           <p className="text-sm font-bold text-[var(--text-primary)]">
@@ -443,17 +463,26 @@ export default function ScheduleView({
           </p>
 
           <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
-            Week {currentWeek} - {formatDate(weekStart)} to{' '}
-            {formatDate(addDays(weekStart, 5))}
+            Week {currentWeek} -{' '}
+            {formatDate(weekStart)} to{' '}
+            {formatDate(
+              addDays(weekStart, 5)
+            )}
           </p>
         </div>
 
         <span className="text-[10px] font-medium text-[var(--text-secondary)]">
-          {processedSchedule.length} items
+          {schedule.length} items
+          {selectedExamCount > 0
+            ? ` - ${selectedExamCount} exam${
+                selectedExamCount > 1
+                  ? 's'
+                  : ''
+              }`
+            : ''}
         </span>
       </div>
 
-      {/* Data warning */}
       {!loading && !hasScheduleData && (
         <div className="p-3 rounded-xl bg-[#f59e0b]/10 border border-[#f59e0b]/20 text-xs text-[#f59e0b]">
           Academic timetable data is not loaded.
@@ -462,41 +491,39 @@ export default function ScheduleView({
         </div>
       )}
 
-      {/* Schedule */}
       {loading ? (
         <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
           Loading timetable...
         </div>
-      ) : processedSchedule.length > 0 ? (
+      ) : schedule.length > 0 ? (
         <div className="bg-[var(--surface-glass)] rounded-2xl overflow-hidden divide-y divide-[var(--border-glass)]">
-          {processedSchedule.map((item, index) => {
-            const isPast =
+          {schedule.map((item, index) => {
+            const past =
               item.status === 'past';
 
-            const isInProgress =
+            const current =
               item.status === 'in_progress';
 
-            const isNext =
+            const next =
               item.status === 'next';
 
-            const minutesLeft =
-              isInProgress
-                ? getMinutesUntilEnd(
-                    item.time,
-                    now
-                  )
-                : null;
+            const minutesLeft = current
+              ? getMinutesUntilEnd(
+                  item.time,
+                  now
+                )
+              : null;
 
-            const timeParts =
+            const range =
               parseTimeRange(item.time);
 
-            const startTime =
-              timeParts?.startTime ||
+            const start =
+              range?.startTime ||
               item.startLessonTime ||
               '09:00';
 
-            const endTime =
-              timeParts?.endTime ||
+            const end =
+              range?.endTime ||
               item.endLessonTime ||
               '10:20';
 
@@ -507,40 +534,38 @@ export default function ScheduleView({
                   onLessonClick?.(item)
                 }
                 className={`w-full p-4 flex items-center justify-between gap-3 transition-all text-left ${
-                  isPast
+                  past
                     ? 'opacity-35'
                     : 'opacity-100'
                 } ${
-                  isInProgress
+                  current
                     ? 'bg-white/10'
                     : ''
                 }`}
               >
-                {/* Time */}
                 <div className="w-20 shrink-0 font-mono">
                   <span
                     className={`block text-xs font-bold ${
-                      isInProgress
+                      current
                         ? 'text-[#30d158] text-sm'
-                        : isNext
+                        : next
                           ? 'text-[#2997ff]'
                           : 'text-[var(--text-primary)]'
                     }`}
                   >
-                    {startTime}
+                    {start}
                   </span>
 
                   <span className="block text-[10px] text-[var(--text-secondary)]">
-                    {endTime}
+                    {end}
                   </span>
                 </div>
 
-                {/* Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <h4
                       className={`text-sm truncate ${
-                        isInProgress
+                        current
                           ? 'font-bold text-base text-[var(--text-primary)]'
                           : 'font-semibold text-[var(--text-primary)]'
                       }`}
@@ -548,13 +573,13 @@ export default function ScheduleView({
                       {item.subject || 'Lesson'}
                     </h4>
 
-                    {isInProgress && (
+                    {current && (
                       <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#30d158]/20 text-[#30d158] shrink-0">
                         NOW
                       </span>
                     )}
 
-                    {isNext && (
+                    {next && (
                       <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#2997ff]/15 text-[#2997ff] shrink-0">
                         NEXT
                       </span>
@@ -574,13 +599,13 @@ export default function ScheduleView({
                       </span>
                     ) : (
                       <>
-                        Room {item.room || '-'} {'\u2022'}{' '}
-                        {item.teacher || '-'}
+                        Room {item.room || '-'}{' '}
+                        • {item.teacher || '-'}
                       </>
                     )}
                   </p>
 
-                  {isInProgress &&
+                  {current &&
                     minutesLeft !== null && (
                       <p className="text-[11px] font-bold text-[#30d158] mt-1">
                         Ends in {minutesLeft} min
@@ -588,38 +613,37 @@ export default function ScheduleView({
                     )}
                 </div>
 
-                {/* Type / actions */}
-                <div className="text-right shrink-0">
+                <div className="text-right shrink-0 flex items-center gap-1.5">
                   <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                    {item.type || 'Lesson'}
+                    {item.type || 'Lecture'}
                   </span>
 
                   {item.isPersonal && (
-                    <div className="flex items-center gap-1 mt-1">
+                    <div className="flex items-center gap-1 ml-1">
                       <button
                         type="button"
                         onClick={event => {
                           event.stopPropagation();
-                          handleOpenEditModal(item);
+                          openEditModal(item);
                         }}
                         className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#2997ff] hover:bg-white/10 transition-colors"
                         title="Edit event"
                         aria-label="Edit personal event"
                       >
-                        Edit
+                        ✎
                       </button>
 
                       <button
                         type="button"
                         onClick={event => {
                           event.stopPropagation();
-                          handleDeleteEvent(item.id);
+                          deleteEvent(item.id);
                         }}
                         className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#ff3b30] hover:bg-white/10 transition-colors"
                         title="Delete event"
                         aria-label="Delete personal event"
                       >
-                        Delete
+                        ×
                       </button>
                     </div>
                   )}
@@ -630,21 +654,15 @@ export default function ScheduleView({
         </div>
       ) : (
         <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
-          No classes or events scheduled for this date.
-        </div>
-      )}
-
-      {selectedExamCount > 0 && (
-        <div className="p-3 rounded-xl bg-[#2997ff]/10 text-xs text-[#2997ff]">
-          {selectedExamCount} exam
-          {selectedExamCount === 1 ? '' : 's'} on this date.
+          No classes or events scheduled for{' '}
+          {formatFullDate(selectedDate)}.
         </div>
       )}
 
       <PersonalEventModal
         isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSaveEvent={handleSaveEvent}
+        onClose={closeModal}
+        onSaveEvent={saveEvent}
         initialEvent={editingEvent}
       />
     </div>
