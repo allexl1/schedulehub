@@ -3,7 +3,7 @@ import GlassCard from '../components/common/GlassCard';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function SettingsView({ group, setGroup, themeMode = 'system', setThemeMode }) {
-  const [inputVal, setInputVal] = useState(group || '150501');
+  const [inputVal, setInputVal] = useState(group || '');
   const [savedMsg, setSavedMsg] = useState(false);
 
 const { language, setLanguage, t } = useLanguage();
@@ -95,7 +95,7 @@ const { language, setLanguage, t } = useLanguage();
             type="text"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
-            placeholder="150501"
+            placeholder="Enter your group number"
             className="flex-1 bg-black/10 dark:bg-white/5 border border-[var(--border-glass)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none focus:border-[#2997ff]"
           />
           <button
