@@ -1,13 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+
 import GlassCard from '../components/common/GlassCard';
 import Icon from '../components/common/Icon';
 
-const EMPTY_TEACHERS = [];
+import { useOffline } from '../hooks/useOffline';
+import { useTeachers } from '../hooks/useTeachers';
 
 function getTeacherName(teacher) {
   return (
     teacher?.name ||
-    [teacher?.firstName, teacher?.middleName, teacher?.lastName]
+    [
+      teacher?.firstName,
+      teacher?.middleName,
+      teacher?.lastName
+    ]
       .filter(Boolean)
       .join(' ') ||
     'Unknown teacher'
@@ -90,16 +96,15 @@ function getPhotoUrl(teacher) {
   return url;
 }
 
-function TeacherAvatar({ teacher, large = false }) {
+function TeacherAvatar({
+  teacher,
+  large = false
+}) {
   const [imageFailed, setImageFailed] =
     useState(false);
 
   const photoUrl =
     getPhotoUrl(teacher);
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [photoUrl]);
 
   const sizeClass =
     large
@@ -134,108 +139,23 @@ function TeacherAvatar({ teacher, large = false }) {
 }
 
 export default function TeachersView() {
-  const [teachers, setTeachers] =
-    useState(EMPTY_TEACHERS);
+  const isOffline = useOffline();
+
+  const {
+    teachers,
+    loading,
+    error,
+    cached,
+    lastUpdated
+  } = useTeachers({
+    isOffline
+  });
 
   const [searchQuery, setSearchQuery] =
     useState('');
 
   const [selectedTeacher, setSelectedTeacher] =
     useState(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadTeachers() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response =
-          await fetch(
-            '/api/bsuir/teacher',
-            {
-              headers: {
-                Accept:
-                  'application/json'
-              }
-            }
-          );
-
-        let json = null;
-
-        try {
-          json =
-            await response.json();
-        } catch {
-          json = null;
-        }
-
-        if (!response.ok) {
-          throw new Error(
-            json?.error ||
-              json?.message ||
-              `Teacher server returned HTTP ${response.status}.`
-          );
-        }
-
-        if (
-          !json ||
-          json.success !== true ||
-          !json.data ||
-          !Array.isArray(
-            json.data.teachers
-          )
-        ) {
-          throw new Error(
-            'The teacher server returned invalid data.'
-          );
-        }
-
-        if (cancelled) {
-          return;
-        }
-
-        setTeachers(
-          json.data.teachers
-        );
-      } catch (fetchError) {
-        if (cancelled) {
-          return;
-        }
-
-        console.error(
-          'Failed to load teachers:',
-          fetchError
-        );
-
-        setTeachers(
-          EMPTY_TEACHERS
-        );
-
-        setError(
-          fetchError?.message ||
-            'Unable to load teachers.'
-        );
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadTeachers();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const filteredTeachers =
     useMemo(() => {
@@ -256,8 +176,9 @@ export default function TeachersView() {
             ).toLowerCase();
 
           const compactName =
-            teacher?.compactName
-              ?.toLowerCase() || '';
+            String(
+              teacher?.compactName || ''
+            ).toLowerCase();
 
           const department =
             getDepartmentName(
@@ -292,7 +213,8 @@ export default function TeachersView() {
     teacher => {
       setSelectedTeacher(
         current =>
-          current?.id === teacher?.id
+          current?.id ===
+          teacher?.id
             ? null
             : teacher
       );
@@ -330,6 +252,22 @@ export default function TeachersView() {
           </div>
         </div>
       </div>
+
+      {cached && !error && (
+        <div className="text-[10px] text-[var(--text-secondary)]">
+          {isOffline
+            ? 'Offline • showing cached teachers'
+            : 'Showing the latest available teacher directory'}
+          {lastUpdated && (
+            <>
+              {' • '}
+              {new Date(
+                lastUpdated
+              ).toLocaleString()}
+            </>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="space-y-2.5">
@@ -481,7 +419,9 @@ export default function TeachersView() {
 
                             {teacher?.compactName && (
                               <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                                {teacher.compactName}
+                                {
+                                  teacher.compactName
+                                }
                               </p>
                             )}
                           </div>
@@ -495,7 +435,9 @@ export default function TeachersView() {
                               </span>
 
                               <span className="text-xs text-[var(--text-primary)]">
-                                {department}
+                                {
+                                  department
+                                }
                               </span>
                             </div>
                           )}
@@ -507,7 +449,9 @@ export default function TeachersView() {
                               </span>
 
                               <span className="text-xs text-[var(--text-primary)]">
-                                {teacher.rank}
+                                {
+                                  teacher.rank
+                                }
                               </span>
                             </div>
                           )}
@@ -519,7 +463,9 @@ export default function TeachersView() {
                               </span>
 
                               <span className="text-xs text-[var(--text-primary)]">
-                                {teacher.degree}
+                                {
+                                  teacher.degree
+                                }
                               </span>
                             </div>
                           )}
@@ -531,7 +477,9 @@ export default function TeachersView() {
                               </span>
 
                               <span className="text-xs text-[var(--text-primary)]">
-                                {teacher.urlId}
+                                {
+                                  teacher.urlId
+                                }
                               </span>
                             </div>
                           )}
