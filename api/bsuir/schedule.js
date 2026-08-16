@@ -3,6 +3,10 @@ import {
   getNextLesson
 } from "../../src/utils/scheduleResolver.js";
 
+import {
+  validateStudentGroup
+} from "./groups.js";
+
 const API = "https://iis.bsuir.by/api/v1";
 const TIMEOUT = 10000;
 const CACHE_TTL = 86400;
@@ -48,14 +52,14 @@ async function redisGet(key) {
 async function redisSet(key, value) {
   const { url, token } = redisConfig();
 
-  if (!url || !token) return;
+  if (!url || !token) return false;
 
   try {
     const encoded = encodeURIComponent(
       JSON.stringify(value)
     );
 
-    await fetch(
+    const response = await fetch(
       `${url}/set/${encodeURIComponent(key)}/${encoded}?ex=${CACHE_TTL}`,
       {
         headers: {
@@ -63,8 +67,10 @@ async function redisSet(key, value) {
         }
       }
     );
+
+    return response.ok;
   } catch {
-    // Redis is optional. Never fail the API because cache failed.
+    return false;
   }
 }
 
@@ -117,6 +123,17 @@ function validWeek(value) {
     : null;
 }
 
+function normalizeSubgroup(value) {
+  const raw = String(value ?? "all")
+    .trim()
+    .toLowerCase();
+
+  if (raw === "1") return 1;
+  if (raw === "2") return 2;
+
+  return "all";
+}
+
 function fallbackData(studentGroup) {
   return {
     studentGroup,
@@ -134,12 +151,12 @@ export default async function handler(req, res) {
     "s-maxage=3600, stale-while-revalidate=86400"
   );
 
-  const studentGroup =
+  const requestedGroup =
     typeof req.query.group === "string"
       ? req.query.group.trim()
       : "";
 
-  if (!studentGroup) {
+  if (!requestedGroup) {
     return res.status(400).json({
       success: false,
       cached: false,
@@ -152,6 +169,40 @@ export default async function handler(req, res) {
     });
   }
 
+  const subgroup =
+    normalizeSubgroup(
+      req.query.subgroup
+    );
+
+  const groupResult =
+    await validateStudentGroup(
+      requestedGroup
+    );
+
+  if (!groupResult.valid) {
+    return res.status(400).json({
+      success: false,
+      cached: groupResult.cached,
+      fallback: false,
+      stale: groupResult.stale,
+      debug: {
+        error: groupResult.reason,
+        requestedGroup,
+        groupSource:
+          groupResult.cached
+            ? "redis"
+            : "bsuir"
+      },
+      data: null
+    });
+  }
+
+  const studentGroup =
+    String(
+      groupResult.group?.name ||
+      requestedGroup
+    ).trim();
+
   const scheduleKey =
     `bsuir:schedule:${studentGroup}`;
 
@@ -160,8 +211,14 @@ export default async function handler(req, res) {
 
   const debug = {
     group: studentGroup,
+    requestedGroup,
+    subgroup,
     scheduleSource: null,
-    weekSource: null
+    weekSource: null,
+    groupSource:
+      groupResult.cached
+        ? "redis"
+        : "bsuir"
   };
 
   let scheduleData = null;
@@ -170,14 +227,17 @@ export default async function handler(req, res) {
   let cached = false;
   let stale = false;
 
-  const results = await Promise.allSettled([
-    fetchJson(
-      `${API}/schedule?studentGroup=${encodeURIComponent(studentGroup)}`
-    ),
-    fetchJson(
-      `${API}/schedule/current-week`
-    )
-  ]);
+  const results =
+    await Promise.allSettled([
+      fetchJson(
+        `${API}/schedule?studentGroup=${encodeURIComponent(
+          studentGroup
+        )}`
+      ),
+      fetchJson(
+        `${API}/schedule/current-week`
+      )
+    ]);
 
   const scheduleResult = results[0];
   const weekResult = results[1];
@@ -188,7 +248,9 @@ export default async function handler(req, res) {
       scheduleResult.value?.schedules
     )
   ) {
-    scheduleData = scheduleResult.value;
+    scheduleData =
+      scheduleResult.value;
+
     debug.scheduleSource = "bsuir";
   } else {
     debug.scheduleSource =
@@ -222,10 +284,14 @@ export default async function handler(req, res) {
         cachedSchedule.schedules
       )
     ) {
-      scheduleData = cachedSchedule;
+      scheduleData =
+        cachedSchedule;
+
       cached = true;
       stale = true;
-      debug.scheduleSource = "redis";
+
+      debug.scheduleSource =
+        "redis";
     }
   }
 
@@ -243,7 +309,9 @@ export default async function handler(req, res) {
     if (currentWeek) {
       cached = true;
       stale = true;
-      debug.weekSource = "redis";
+
+      debug.weekSource =
+        "redis";
     }
   }
 
@@ -263,7 +331,9 @@ export default async function handler(req, res) {
         ...debug,
         source: "fallback"
       },
-      data: fallbackData(studentGroup)
+      data: fallbackData(
+        studentGroup
+      )
     });
   }
 
@@ -293,7 +363,7 @@ export default async function handler(req, res) {
       scheduleData.schedules,
       now,
       currentWeek,
-      1,
+      subgroup,
       {
         referenceDate: now
       }
@@ -304,7 +374,7 @@ export default async function handler(req, res) {
       scheduleData.schedules,
       now,
       null,
-      1,
+      subgroup,
       currentWeek,
       now
     );
@@ -326,7 +396,9 @@ export default async function handler(req, res) {
         scheduleData.schedules,
       todaySchedules,
       exams:
-        Array.isArray(scheduleData.exams)
+        Array.isArray(
+          scheduleData.exams
+        )
           ? scheduleData.exams
           : [],
       currentWeek,
