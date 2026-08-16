@@ -2,9 +2,7 @@ import React, {
   useEffect,
   useState
 } from 'react';
-
 import FloatingNav from './components/FloatingNav';
-
 import HomeView from './views/HomeView';
 import ScheduleView from './views/ScheduleView';
 import TeachersView from './views/TeachersView';
@@ -16,7 +14,7 @@ import SubjectDetailsView from './views/SubjectDetailsView';
 import { useTelegram } from './hooks/useTelegram';
 import { useOffline } from './hooks/useOffline';
 import { useSchedule } from './hooks/useSchedule';
-
+import { clearScheduleCache } from './services/scheduleService';
 import { LanguageProvider } from './context/LanguageContext';
 
 function AppContent() {
@@ -408,7 +406,10 @@ function AppContent() {
                   'sh_theme',
                   newTheme
                 );
-              }
+              }}
+              onClearCache={() => {
+  clearScheduleCache(group);
+}}
             }
           />
         )}
