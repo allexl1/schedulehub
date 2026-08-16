@@ -367,53 +367,38 @@ function AppContent() {
           <ExamsView />
         )}
 
-        {activeTab === 'settings' && (
-          <SettingsView
-            group={
-              group
-            }
-            setGroup={
-              newGroup => {
-                const normalizedGroup =
-                  String(
-                    newGroup || ''
-                  ).trim();
+ {activeTab === 'settings' && (
+  <SettingsView
+    group={group}
+    setGroup={newGroup => {
+      const normalizedGroup =
+        String(newGroup || '').trim();
 
-                if (!normalizedGroup) {
-                  return;
-                }
+      if (!normalizedGroup) {
+        return;
+      }
 
-                setGroup(
-                  normalizedGroup
-                );
+      setGroup(normalizedGroup);
 
-                localStorage.setItem(
-                  'sh_group',
-                  normalizedGroup
-                );
-              }
-            }
-            themeMode={
-              themeMode
-            }
-            setThemeMode={
-  newTheme => {
-    setThemeMode(
-      newTheme
-    );
+      localStorage.setItem(
+        'sh_group',
+        normalizedGroup
+      );
+    }}
+    themeMode={themeMode}
+    setThemeMode={newTheme => {
+      setThemeMode(newTheme);
 
-    localStorage.setItem(
-      'sh_theme',
-      newTheme
-    );
-  }
-}
-onClearCache={() => {
-  clearScheduleCache(group);
-}}
-            }
-          />
-        )}
+      localStorage.setItem(
+        'sh_theme',
+        newTheme
+      );
+    }}
+    onClearCache={() => {
+      clearScheduleCache(group);
+    }}
+  />
+)}
       </main>
 
       <FloatingNav
