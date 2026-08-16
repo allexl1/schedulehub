@@ -2,9 +2,16 @@ import React, { useState } from 'react';
 import GlassCard from '../components/common/GlassCard';
 import { useLanguage } from '../context/LanguageContext';
 
-export default function SettingsView({ group, setGroup, themeMode = 'system', setThemeMode }) {
+export default function SettingsView({
+  group,
+  setGroup,
+  themeMode = 'system',
+  setThemeMode,
+  onClearCache
+}) {
   const [inputVal, setInputVal] = useState(group || '');
   const [savedMsg, setSavedMsg] = useState(false);
+  const [cacheClearedMsg, setCacheClearedMsg] = useState(false);
 
 const { language, setLanguage, t } = useLanguage();
   
@@ -111,6 +118,37 @@ const { language, setLanguage, t } = useLanguage();
           </p>
         )}
       </GlassCard>
+      
+      <GlassCard>
+  <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">
+    Cached Timetable
+  </h3>
+
+  <p className="text-xs text-[var(--text-secondary)] mb-3">
+    Clear the timetable saved on this device. Your group and settings will not be changed.
+  </p>
+
+  <button
+    type="button"
+    onClick={() => {
+      onClearCache?.();
+      setCacheClearedMsg(true);
+
+      setTimeout(() => {
+        setCacheClearedMsg(false);
+      }, 2000);
+    }}
+    className="w-full bg-black/10 dark:bg-white/5 border border-[var(--border-glass)] text-[var(--text-primary)] font-semibold text-xs px-4 py-2.5 rounded-xl active:scale-[0.98] transition-transform"
+  >
+    Clear Cached Timetable
+  </button>
+
+  {cacheClearedMsg && (
+    <p className="text-[11px] text-[#30d158] mt-2 font-semibold">
+      ✓ Cached timetable cleared.
+    </p>
+  )}
+</GlassCard>
 
       {/* Reminders Info */}
       <GlassCard>
