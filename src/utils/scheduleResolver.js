@@ -1,64 +1,240 @@
 const RUSSIAN_DAYS = [
-  "Воскресенье",
-  "Понедельник",
-  "Вторник",
-  "Среда",
-  "Четверг",
-  "Пятница",
-  "Суббота"
+  'Воскресенье',
+  'Понедельник',
+  'Вторник',
+  'Среда',
+  'Четверг',
+  'Пятница',
+  'Суббота'
 ];
 
 const ENGLISH_TO_RUSSIAN = {
-  Sun: "Воскресенье",
-  Mon: "Понедельник",
-  Tue: "Вторник",
-  Wed: "Среда",
-  Thu: "Четверг",
-  Fri: "Пятница",
-  Sat: "Суббота",
-
-  Sunday: "Воскресенье",
-  Monday: "Понедельник",
-  Tuesday: "Вторник",
-  Wednesday: "Среда",
-  Thursday: "Четверг",
-  Friday: "Пятница",
-  Saturday: "Суббота"
+  Sun: 'Воскресенье',
+  Mon: 'Понедельник',
+  Tue: 'Вторник',
+  Wed: 'Среда',
+  Thu: 'Четверг',
+  Fri: 'Пятница',
+  Sat: 'Суббота',
+  Sunday: 'Воскресенье',
+  Monday: 'Понедельник',
+  Tuesday: 'Вторник',
+  Wednesday: 'Среда',
+  Thursday: 'Четверг',
+  Friday: 'Пятница',
+  Saturday: 'Суббота'
 };
 
-function getRussianDay(date) {
-  if (
-    !(date instanceof Date) ||
-    Number.isNaN(date.getTime())
-  ) {
-    return null;
+function validDate(value) {
+  if (value instanceof Date) {
+    return !Number.isNaN(value.getTime()) ? new Date(value) : null;
   }
 
-  return RUSSIAN_DAYS[
-    date.getDay()
-  ];
+  if (!value) return null;
+
+  const text = String(value).trim();
+
+  const ru = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (ru) {
+    const date = new Date(
+      Number(ru[3]),
+      Number(ru[2]) - 1,
+      Number(ru[1])
+    );
+
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const iso = new Date(text);
+
+  return Number.isNaN(iso.getTime()) ? null : iso;
 }
 
-function matchesWeek(
-  lesson,
-  currentWeek
-) {
-  const weeks =
-    Array.isArray(
-      lesson?.weekNumber
-    )
-      ? lesson.weekNumber
-          .map(Number)
-          .filter(Number.isInteger)
-      : [];
+function startOfDay(date) {
+  const d = validDate(date);
 
-  if (weeks.length === 0) {
-    return true;
+  if (!d) return null;
+
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function sameDay(a, b) {
+  const first = startOfDay(a);
+  const second = startOfDay(b);
+
+  if (!first || !second) return false;
+
+  return (
+    first.getFullYear() === second.getFullYear() &&
+    first.getMonth() === second.getMonth() &&
+    first.getDate() === second.getDate()
+  );
+}
+
+function startOfWeek(date) {
+  const d = startOfDay(date);
+
+  if (!d) return null;
+
+  const day = d.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+
+  d.setDate(d.getDate() + mondayOffset);
+
+  return d;
+}
+
+function russianDayForDate(date) {
+  const d = validDate(date);
+
+  if (!d) return null;
+
+  return RUSSIAN_DAYS[d.getDay()];
+}
+
+function academicWeekForDate(date, now = new Date()) {
+  const target = validDate(date);
+  const current = validDate(now) || new Date();
+
+  if (!target) return null;
+
+  let firstDay = new Date(
+    target.getFullYear(),
+    8,
+    1
+  );
+
+  const lastDay = new Date(
+    target.getFullYear(),
+    6,
+    1
+  );
+
+  if (
+    target < firstDay &&
+    current < lastDay
+  ) {
+    firstDay = new Date(
+      firstDay.getFullYear() - 1,
+      8,
+      1
+    );
   }
 
-  return weeks.includes(
-    Number(currentWeek)
-  );
+  const firstWeek = startOfWeek(firstDay);
+  const targetWeek = startOfWeek(target);
+
+  if (!firstWeek || !targetWeek) return null;
+
+  const millisecondsPerWeek =
+    7 * 24 * 60 * 60 * 1000;
+
+  const distance =
+    Math.round(
+      (targetWeek.getTime() - firstWeek.getTime()) /
+      millisecondsPerWeek
+    );
+
+  return (Math.abs(distance) % 4) + 1;
+}
+
+function normalizeWeekNumbers(value) {
+  if (value === null || value === undefined) {
+    return [1, 2, 3, 4];
+  }
+
+  if (Array.isArray(value)) {
+    const numbers = value
+      .map(Number)
+      .filter(
+        number =>
+          Number.isInteger(number) &&
+          number >= 0 &&
+          number <= 4
+      );
+
+    if (
+      numbers.includes(0) ||
+      numbers.length === 0
+    ) {
+      return [1, 2, 3, 4];
+    }
+
+    return [
+      ...new Set(numbers)
+    ];
+  }
+
+  const number = Number(value);
+
+  if (!Number.isInteger(number)) {
+    return [1, 2, 3, 4];
+  }
+
+  if (number === 0) {
+    return [1, 2, 3, 4];
+  }
+
+  if (number >= 1 && number <= 4) {
+    return [number];
+  }
+
+  return [];
+}
+
+function matchesWeek(lesson, weekNumber) {
+  if (!Number.isInteger(weekNumber)) {
+    return false;
+  }
+
+  return normalizeWeekNumbers(
+    lesson?.weekNumber
+  ).includes(weekNumber);
+}
+
+function matchesDateRestrictions(
+  lesson,
+  date
+) {
+  const target = startOfDay(date);
+
+  if (!target) return false;
+
+  const dateLesson =
+    validDate(lesson?.dateLesson);
+
+  if (
+    dateLesson &&
+    !sameDay(dateLesson, target)
+  ) {
+    return false;
+  }
+
+  const startLessonDate =
+    validDate(lesson?.startLessonDate);
+
+  const endLessonDate =
+    validDate(lesson?.endLessonDate);
+
+  if (
+    startLessonDate &&
+    endLessonDate
+  ) {
+    const start = startOfDay(startLessonDate);
+    const end = startOfDay(endLessonDate);
+
+    if (
+      !start ||
+      !end ||
+      target < start ||
+      target > end
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function matchesSubgroup(
@@ -67,32 +243,36 @@ function matchesSubgroup(
 ) {
   const lessonSubgroup =
     Number(
-      lesson?.numSubgroup
+      lesson?.numSubgroup ??
+      lesson?.subgroup ??
+      0
     );
 
-  /*
-   * 0 means the lesson is not split.
-   */
   if (
-    lessonSubgroup === 0 ||
-    !Number.isInteger(
-      lessonSubgroup
-    )
+    !Number.isInteger(lessonSubgroup) ||
+    lessonSubgroup === 0
+  ) {
+    return true;
+  }
+
+  const selectedSubgroup =
+    Number(subgroup);
+
+  if (
+    !Number.isInteger(selectedSubgroup)
   ) {
     return true;
   }
 
   return (
     lessonSubgroup ===
-    Number(subgroup)
+    selectedSubgroup
   );
 }
 
-function timeToMinutes(
-  value
-) {
+function timeToMinutes(value) {
   const match =
-    String(value || "").match(
+    String(value || '').match(
       /^(\d{1,2}):(\d{2})/
     );
 
@@ -106,18 +286,37 @@ function timeToMinutes(
   );
 }
 
-function getTeacher(
-  employees
-) {
+function makeDateTime(date, time) {
+  const target = startOfDay(date);
+
+  if (!target) return null;
+
+  const match =
+    String(time || '').match(
+      /^(\d{1,2}):(\d{2})/
+    );
+
+  if (!match) return null;
+
+  target.setHours(
+    Number(match[1]),
+    Number(match[2]),
+    0,
+    0
+  );
+
+  return target;
+}
+
+function getTeacher(employees) {
   if (
     !Array.isArray(employees) ||
-    !employees.length
+    employees.length === 0
   ) {
-    return "";
+    return '';
   }
 
-  const employee =
-    employees[0];
+  const employee = employees[0] || {};
 
   return [
     employee.firstName,
@@ -125,131 +324,148 @@ function getTeacher(
     employee.lastName
   ]
     .filter(Boolean)
-    .join(" ");
+    .join(' ');
 }
 
-function getRoom(
-  auditories
-) {
-  if (
-    !Array.isArray(auditories)
-  ) {
-    return "";
+function getRoom(auditories) {
+  if (!Array.isArray(auditories)) {
+    return '';
   }
 
-  return auditories[0] || "";
+  return auditories[0] || '';
 }
 
 export function normalizeLesson(
-  lesson = {}
+  lesson = {},
+  date = null
 ) {
   const start =
-    lesson.startLessonTime || "";
+    lesson.startLessonTime || '';
 
   const end =
-    lesson.endLessonTime || "";
+    lesson.endLessonTime || '';
 
   const subject =
     lesson.subject ||
     lesson.subjectFullName ||
-    "Lesson";
+    'Lesson';
 
   const room =
-    getRoom(
-      lesson.auditories
-    );
+    getRoom(lesson.auditories);
 
   const teacher =
-    getTeacher(
-      lesson.employees
-    );
+    getTeacher(lesson.employees);
+
+  const dateKey = date
+    ? formatDateKey(date)
+    : '';
 
   const id =
     lesson.id ||
     [
       subject,
+      dateKey,
       start,
       end,
       room,
-      lesson.numSubgroup
-    ].join("-");
+      lesson.numSubgroup || 0
+    ].join('-');
 
   return {
     ...lesson,
-
     id,
-
     subject,
-
     subjectFullName:
       lesson.subjectFullName ||
       subject,
-
     type:
-      lesson.lessonTypeAbbrev ||
-      "",
-
+      lesson.lessonTypeAbbrev || '',
     time:
       start && end
         ? `${start}-${end}`
         : start,
-
     startLessonTime: start,
-
     endLessonTime: end,
-
     room,
-
     teacher,
-
     weekNumber:
-      Array.isArray(
-        lesson.weekNumber
-      )
+      Array.isArray(lesson.weekNumber)
         ? lesson.weekNumber
-        : [],
-
+        : lesson.weekNumber === undefined
+          ? []
+          : [lesson.weekNumber],
     numSubgroup:
       Number(
-        lesson.numSubgroup
-      ) || 0
+        lesson.numSubgroup ??
+        lesson.subgroup ??
+        0
+      ) || 0,
+    date: dateKey || undefined,
+    startDateTime:
+      date && start
+        ? makeDateTime(date, start)
+        : undefined,
+    endDateTime:
+      date && end
+        ? makeDateTime(date, end)
+        : undefined
   };
+}
+
+function getDayLessons(
+  schedules,
+  date
+) {
+  const day = russianDayForDate(date);
+
+  if (!day) return [];
+
+  const lessons = schedules?.[day];
+
+  return Array.isArray(lessons)
+    ? lessons
+    : [];
 }
 
 export function resolveLessonsForDate(
   schedules,
   date,
   currentWeek,
-  subgroup = 1
+  subgroup = 1,
+  options = {}
 ) {
-  if (
-    !schedules ||
-    typeof schedules !== "object"
-  ) {
+  const target = validDate(date);
+
+  if (!target) return [];
+
+  const week =
+    Number.isInteger(
+      Number(currentWeek)
+    )
+      ? Number(currentWeek)
+      : academicWeekForDate(
+          target,
+          options.now || new Date()
+        );
+
+  if (!Number.isInteger(week)) {
     return [];
   }
 
-  const russianDay =
-    getRussianDay(date);
-
-  if (!russianDay) {
-    return [];
-  }
-
-  const lessons =
-    schedules[
-      russianDay
-    ];
-
-  if (!Array.isArray(lessons)) {
-    return [];
-  }
-
-  return lessons
+  return getDayLessons(
+    schedules,
+    target
+  )
     .filter(lesson =>
       matchesWeek(
         lesson,
-        currentWeek
+        week
+      )
+    )
+    .filter(lesson =>
+      matchesDateRestrictions(
+        lesson,
+        target
       )
     )
     .filter(lesson =>
@@ -258,7 +474,12 @@ export function resolveLessonsForDate(
         subgroup
       )
     )
-    .map(normalizeLesson)
+    .map(lesson =>
+      normalizeLesson(
+        lesson,
+        target
+      )
+    )
     .sort(
       (a, b) =>
         timeToMinutes(
@@ -277,23 +498,20 @@ export function resolveLessonsForWeekday(
   subgroup = 1
 ) {
   const russianDay =
-    ENGLISH_TO_RUSSIAN[
-      weekday
-    ] || weekday;
+    ENGLISH_TO_RUSSIAN[weekday] ||
+    weekday;
 
-  if (
-    !schedules ||
-    !Array.isArray(
-      schedules[russianDay]
-    )
-  ) {
+  const lessons =
+    schedules?.[russianDay];
+
+  if (!Array.isArray(lessons)) {
     return {
       [currentWeek]: []
     };
   }
 
-  const lessons =
-    schedules[russianDay]
+  const filtered =
+    lessons
       .filter(lesson =>
         matchesWeek(
           lesson,
@@ -318,12 +536,130 @@ export function resolveLessonsForWeekday(
       );
 
   return {
-    [currentWeek]: lessons
+    [currentWeek]: filtered
   };
+}
+
+export function getAcademicWeekForDateMondayBased(
+  date,
+  now = new Date()
+) {
+  return academicWeekForDate(
+    date,
+    now
+  );
+}
+
+export function resolveWeek(
+  date,
+  now = new Date()
+) {
+  return academicWeekForDate(
+    date,
+    now
+  );
 }
 
 export function getRussianDayName(
   date
 ) {
-  return getRussianDay(date);
+  return russianDayForDate(date);
+}
+
+export function formatDateKey(date) {
+  const d = validDate(date);
+
+  if (!d) return '';
+
+  const year =
+    d.getFullYear();
+
+  const month =
+    String(
+      d.getMonth() + 1
+    ).padStart(2, '0');
+
+  const day =
+    String(
+      d.getDate()
+    ).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+export function resolveScheduleForDate(
+  schedules,
+  date,
+  subgroup = 1,
+  now = new Date()
+) {
+  const week =
+    academicWeekForDate(
+      date,
+      now
+    );
+
+  return resolveLessonsForDate(
+    schedules,
+    date,
+    week,
+    subgroup,
+    { now }
+  );
+}
+
+export function getNextLesson(
+  schedules,
+  startDate = new Date(),
+  endDate = null,
+  subgroup = 1,
+  now = new Date()
+) {
+  const start =
+    validDate(startDate);
+
+  if (!start) return null;
+
+  const limit =
+    endDate
+      ? startOfDay(endDate)
+      : new Date(
+          start.getTime() +
+          370 * 24 * 60 * 60 * 1000
+        );
+
+  if (!limit) return null;
+
+  let date = startOfDay(start);
+
+  while (
+    date &&
+    date <= limit
+  ) {
+    const lessons =
+      resolveScheduleForDate(
+        schedules,
+        date,
+        subgroup,
+        now
+      );
+
+    const upcoming =
+      lessons.find(
+        lesson =>
+          lesson.endDateTime &&
+          lesson.endDateTime > now
+      );
+
+    if (upcoming) {
+      return upcoming;
+    }
+
+    date = new Date(date);
+    date.setDate(
+      date.getDate() + 1
+    );
+  }
+
+  return null;
 }
