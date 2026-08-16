@@ -1,6 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, {
+  useEffect,
+  useState
+} from 'react';
 
 import FloatingNav from './components/FloatingNav';
+
 import HomeView from './views/HomeView';
 import ScheduleView from './views/ScheduleView';
 import TeachersView from './views/TeachersView';
@@ -11,216 +15,9 @@ import SubjectDetailsView from './views/SubjectDetailsView';
 
 import { useTelegram } from './hooks/useTelegram';
 import { useOffline } from './hooks/useOffline';
+import { useSchedule } from './hooks/useSchedule';
+
 import { LanguageProvider } from './context/LanguageContext';
-
-const DEFAULT_GROUP = '373901';
-
-const EMPTY_DATA = {
-  studentGroup: null,
-  schedules: {},
-  todaySchedules: [],
-  exams: [],
-  currentWeek: 1,
-  nextLesson: null,
-  cached: false,
-  fallback: false,
-  stale: false,
-  debug: null
-};
-
-function cacheKey(group) {
-  return `sh_cached_schedule_${String(group || '').trim()}`;
-}
-
-function timestampKey(group) {
-  return `sh_cache_timestamp_${String(group || '').trim()}`;
-}
-
-function readCachedSchedule(group) {
-  if (!group) {
-    return null;
-  }
-
-  try {
-    const value = localStorage.getItem(
-      cacheKey(group)
-    );
-
-    if (!value) {
-      return null;
-    }
-
-    const parsed = JSON.parse(value);
-
-    if (
-      !parsed ||
-      typeof parsed !== 'object'
-    ) {
-      return null;
-    }
-
-    const data =
-      parsed.data &&
-      typeof parsed.data === 'object'
-        ? parsed.data
-        : parsed;
-
-    return {
-      ...EMPTY_DATA,
-      ...data,
-      schedules:
-        data.schedules &&
-        typeof data.schedules === 'object'
-          ? data.schedules
-          : {},
-      todaySchedules:
-        Array.isArray(data.todaySchedules)
-          ? data.todaySchedules
-          : [],
-      exams:
-        Array.isArray(data.exams)
-          ? data.exams
-          : [],
-      currentWeek:
-        Number(data.currentWeek) || 1,
-      nextLesson:
-        data.nextLesson || null,
-      cached: true
-    };
-  } catch (error) {
-    console.error(
-      'Failed to read cached schedule:',
-      error
-    );
-
-    return null;
-  }
-}
-
-function readCacheTimestamp(group) {
-  if (!group) {
-    return null;
-  }
-
-  try {
-    return localStorage.getItem(
-      timestampKey(group)
-    );
-  } catch {
-    return null;
-  }
-}
-
-function saveCachedSchedule(group, json) {
-  if (!group || !json) {
-    return;
-  }
-
-  try {
-    localStorage.setItem(
-      cacheKey(group),
-      JSON.stringify(json)
-    );
-
-    localStorage.setItem(
-      timestampKey(group),
-      new Date().toISOString()
-    );
-  } catch (error) {
-    console.error(
-      'Failed to save schedule cache:',
-      error
-    );
-  }
-}
-
-function normalizeResponse(json) {
-  if (
-    !json ||
-    typeof json !== 'object'
-  ) {
-    return null;
-  }
-
-  const source =
-    json.data &&
-    typeof json.data === 'object'
-      ? json.data
-      : null;
-
-  if (!source) {
-    return null;
-  }
-
-  return {
-    ...EMPTY_DATA,
-    ...source,
-    schedules:
-      source.schedules &&
-      typeof source.schedules === 'object'
-        ? source.schedules
-        : {},
-    todaySchedules:
-      Array.isArray(source.todaySchedules)
-        ? source.todaySchedules
-        : [],
-    exams:
-      Array.isArray(source.exams)
-        ? source.exams
-        : [],
-    currentWeek:
-      Number(source.currentWeek) || 1,
-    nextLesson:
-      source.nextLesson || null,
-    cached:
-      Boolean(json.cached),
-    fallback:
-      Boolean(json.fallback),
-    stale:
-      Boolean(json.stale),
-    debug:
-      json.debug || null
-  };
-}
-
-function hasScheduleData(data) {
-  if (
-    !data ||
-    !data.schedules ||
-    typeof data.schedules !== 'object'
-  ) {
-    return false;
-  }
-
-  return Object.values(
-    data.schedules
-  ).some(
-    value =>
-      Array.isArray(value) &&
-      value.length > 0
-  );
-}
-
-function getStatusMessage(
-  state,
-  offline
-) {
-  if (offline) {
-    return hasScheduleData(state)
-      ? 'Device is offline. Showing the latest cached timetable.'
-      : 'Device is offline and no cached timetable is available.';
-  }
-
-  if (state?.fallback) {
-    return 'BSUIR data is temporarily unavailable. No live timetable data was received.';
-  }
-
-  if (state?.cached || state?.stale) {
-    return 'BSUIR is temporarily unavailable. Showing the latest cached timetable.';
-  }
-
-  return null;
-}
 
 function AppContent() {
   const {
@@ -250,7 +47,7 @@ function AppContent() {
       () =>
         localStorage.getItem(
           'sh_group'
-        ) || DEFAULT_GROUP
+        ) || ''
     );
 
   const [subgroup, setSubgroup] =
@@ -271,42 +68,17 @@ function AppContent() {
         ) || 'system'
     );
 
-  const [loading, setLoading] =
-    useState(true);
-
-  const [apiError, setApiError] =
-    useState(null);
-
-  const [apiState, setApiState] =
-    useState('loading');
-
-  const [scheduleData, setScheduleData] =
-    useState(() => {
-      const savedGroup =
-        localStorage.getItem(
-          'sh_group'
-        ) || DEFAULT_GROUP;
-
-      return (
-        readCachedSchedule(
-          savedGroup
-        ) || {
-          ...EMPTY_DATA
-        }
-      );
-    });
-
-  const [lastUpdated, setLastUpdated] =
-    useState(() => {
-      const savedGroup =
-        localStorage.getItem(
-          'sh_group'
-        ) || DEFAULT_GROUP;
-
-      return readCacheTimestamp(
-        savedGroup
-      );
-    });
+  const {
+    scheduleData,
+    loading,
+    apiError,
+    apiState,
+    lastUpdated
+  } = useSchedule({
+    group,
+    subgroup,
+    isOffline
+  });
 
   useEffect(() => {
     const root =
@@ -330,246 +102,11 @@ function AppContent() {
     colorScheme
   ]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSchedule() {
-      const normalizedGroup =
-        String(group || '').trim();
-
-      if (!normalizedGroup) {
-        setLoading(false);
-        setApiState('error');
-        setApiError(
-          'No student group has been selected.'
-        );
-        return;
-      }
-
-      const localCache =
-        readCachedSchedule(
-          normalizedGroup
-        );
-
-      if (localCache) {
-        setScheduleData(
-          localCache
-        );
-
-        setLastUpdated(
-          readCacheTimestamp(
-            normalizedGroup
-          )
-        );
-      } else {
-        setScheduleData({
-          ...EMPTY_DATA
-        });
-
-        setLastUpdated(null);
-      }
-
-      if (isOffline) {
-        setLoading(false);
-
-        setApiState(
-          localCache
-            ? 'cached'
-            : 'offline'
-        );
-
-        setApiError(
-          getStatusMessage(
-            localCache,
-            true
-          )
-        );
-
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setApiError(null);
-        setApiState('loading');
-
-        const endpoint =
-          `/api/bsuir/schedule?group=${encodeURIComponent(
-            normalizedGroup
-          )}&subgroup=${encodeURIComponent(
-            subgroup
-          )}`;
-
-        const response =
-          await fetch(
-            endpoint,
-            {
-              headers: {
-                Accept:
-                  'application/json'
-              }
-            }
-          );
-
-        let json = null;
-
-        try {
-          json =
-            await response.json();
-        } catch {
-          json = null;
-        }
-
-        if (!response.ok) {
-          throw new Error(
-            json?.debug?.error ||
-            json?.error ||
-            json?.message ||
-            `Schedule server returned HTTP ${response.status}.`
-          );
-        }
-
-        if (
-          !json ||
-          json.success !== true ||
-          !json.data
-        ) {
-          throw new Error(
-            json?.debug?.error ||
-            'The schedule server returned no timetable data.'
-          );
-        }
-
-        if (cancelled) {
-          return;
-        }
-
-        const data =
-          normalizeResponse(json);
-
-        if (!data) {
-          throw new Error(
-            'Invalid schedule response.'
-          );
-        }
-
-        const usable =
-          hasScheduleData(data) ||
-          data.exams.length > 0 ||
-          Boolean(
-            json.data?.studentGroup
-          );
-
-        if (usable) {
-          setScheduleData(data);
-
-          saveCachedSchedule(
-            normalizedGroup,
-            json
-          );
-
-          setLastUpdated(
-            new Date().toISOString()
-          );
-        } else {
-          const cached =
-            localCache;
-
-          if (cached) {
-            setScheduleData(
-              cached
-            );
-          } else {
-            setScheduleData(
-              data
-            );
-          }
-        }
-
-        if (json.fallback) {
-          setApiState(
-            'fallback'
-          );
-          setApiError(
-            getStatusMessage(
-              data,
-              false
-            )
-          );
-        } else if (
-          json.cached ||
-          json.stale
-        ) {
-          setApiState(
-            'cached'
-          );
-          setApiError(
-            getStatusMessage(
-              data,
-              false
-            )
-          );
-        } else {
-          setApiState('live');
-          setApiError(null);
-        }
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        console.error(
-          'Failed to fetch BSUIR schedule:',
-          error
-        );
-
-        if (localCache) {
-          setScheduleData(
-            localCache
-          );
-
-          setApiState(
-            'cached'
-          );
-
-          setApiError(
-            'Unable to refresh the timetable. Showing the last saved timetable.'
-          );
-        } else {
-          setApiState(
-            'error'
-          );
-
-          setApiError(
-            error?.message ||
-              'Unable to load the academic timetable.'
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadSchedule();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    group,
-    subgroup,
-    isOffline
-  ]);
-
   const handleOnboardingComplete = (
     newGroup,
     newSubgroup
   ) => {
-    triggerHaptic(
-      'medium'
-    );
+    triggerHaptic('medium');
 
     const normalizedGroup =
       String(
@@ -578,6 +115,10 @@ function AppContent() {
 
     const normalizedSubgroup =
       Number(newSubgroup) || 1;
+
+    if (!normalizedGroup) {
+      return;
+    }
 
     setGroup(
       normalizedGroup
@@ -605,19 +146,12 @@ function AppContent() {
     );
 
     setIsOnboarded(true);
-
-    setScheduleData({
-      ...EMPTY_DATA
-    });
-
-    setLastUpdated(null);
   };
 
   const handleTabChange = tab => {
-    triggerHaptic(
-      'light'
-    );
+    triggerHaptic('light');
 
+    setSelectedLesson(null);
     setActiveTab(tab);
   };
 
@@ -648,6 +182,11 @@ function AppContent() {
       ? scheduleData.todaySchedules
       : [];
 
+  const weekNumber =
+    Number(
+      scheduleData?.currentWeek
+    ) || 1;
+
   const hour =
     new Date().getHours();
 
@@ -660,6 +199,7 @@ function AppContent() {
   ) {
     greeting =
       'Доброе утро';
+
     greetingEmoji =
       '☀️';
   } else if (
@@ -668,6 +208,7 @@ function AppContent() {
   ) {
     greeting =
       'Добрый день';
+
     greetingEmoji =
       '🌤️';
   } else if (
@@ -676,11 +217,13 @@ function AppContent() {
   ) {
     greeting =
       'Добрый вечер';
+
     greetingEmoji =
       '🌆';
   } else {
     greeting =
       'Доброй ночи';
+
     greetingEmoji =
       '🌙';
   }
@@ -688,8 +231,7 @@ function AppContent() {
   const displayName =
     user?.first_name ||
     (
-      typeof student ===
-      'object'
+      typeof student === 'object'
         ? student?.name
         : student
     ) ||
@@ -700,18 +242,11 @@ function AppContent() {
       ? 'offline'
       : apiState === 'live'
         ? 'live'
-        : apiState ===
-              'cached' ||
-            apiState ===
-              'stale' ||
-            apiState ===
-              'fallback'
+        : apiState === 'cached' ||
+          apiState === 'stale' ||
+          apiState === 'fallback'
           ? 'cached'
           : 'error';
-
-  const weekNumber =
-    scheduleData?.currentWeek ||
-    1;
 
   const greetingText =
     `${greeting}, ${displayName}`;
@@ -763,31 +298,24 @@ function AppContent() {
       {apiError && (
         <div className="mb-4 rounded-2xl p-3 bg-[#f59e0b]/10 border border-[#f59e0b]/20 flex items-center gap-3 text-xs text-[#f59e0b]">
           <span>
-            {apiState === 'live'
-              ? '✓'
-              : isOffline
-                ? '📴'
-                : apiState ===
-                    'cached'
-                  ? '🗄️'
-                  : apiState ===
-                      'fallback'
-                    ? '⚠️'
-                    : '⚠️'}
+            {isOffline
+              ? '📴'
+              : apiState === 'cached'
+                ? '🗄️'
+                : apiState === 'fallback'
+                  ? '⚠️'
+                  : '⚠️'}
           </span>
 
           <div>
             <strong className="block font-bold">
               {isOffline
                 ? 'Offline Mode'
-                : apiState ===
-                    'cached'
+                : apiState === 'cached'
                   ? 'Cached Timetable'
-                  : apiState ===
-                      'fallback'
+                  : apiState === 'fallback'
                     ? 'BSUIR Data Unavailable'
-                    : apiState ===
-                        'error'
+                    : apiState === 'error'
                       ? 'Schedule Loading Error'
                       : 'Schedule Status'}
             </strong>
@@ -846,21 +374,27 @@ function AppContent() {
             group={
               group
             }
-            setGroup={newGroup => {
-              const normalizedGroup =
-                String(
-                  newGroup || ''
-                ).trim();
+            setGroup={
+              newGroup => {
+                const normalizedGroup =
+                  String(
+                    newGroup || ''
+                  ).trim();
 
-              setGroup(
-                normalizedGroup
-              );
+                if (!normalizedGroup) {
+                  return;
+                }
 
-              localStorage.setItem(
-                'sh_group',
-                normalizedGroup
-              );
-            }}
+                setGroup(
+                  normalizedGroup
+                );
+
+                localStorage.setItem(
+                  'sh_group',
+                  normalizedGroup
+                );
+              }
+            }
             themeMode={
               themeMode
             }
