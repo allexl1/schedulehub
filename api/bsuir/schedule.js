@@ -1,40 +1,26 @@
 import {
   resolveLessonsForDate,
   normalizeLesson
-} from '../../src/utils/scheduleResolver.js';
+} from "../../src/utils/scheduleResolver.js";
 
-/**
- * Get Upstash Redis credentials.
- *
- * Supports the common Vercel/Upstash environment variable names.
- */
-function getRedisCredentials() {
-  const url =
-    process.env.UPSTASH_KV_REST_API_URL ||
-    process.env.UPSTASH_URL_REST_API_URL ||
-    process.env.UPSTASH_URL_REST_URL ||
-    process.env.UPSTASH_REDIS_REST_URL ||
-    process.env.KV_REST_API_URL;
+const API = "https://iis.bsuir.by/api/v1";
+const CACHE_TTL = 86400;
 
-  const token =
-    process.env.UPSTASH_KV_REST_API_TOKEN ||
-    process.env.UPSTASH_URL_REST_API_TOKEN ||
-    process.env.UPSTASH_URL_REST_TOKEN ||
-    process.env.UPSTASH_REDIS_REST_TOKEN ||
-    process.env.KV_REST_API_TOKEN;
-
-  return { url, token };
+function getRedisConfig() {
+  return {
+    url:
+      process.env.UPSTASH_REDIS_REST_URL ||
+      process.env.KV_REST_API_URL,
+    token:
+      process.env.UPSTASH_REDIS_REST_TOKEN ||
+      process.env.KV_REST_API_TOKEN
+  };
 }
 
-/**
- * Read a value from Upstash Redis.
- */
-async function getRedisCache(key) {
-  const { url, token } = getRedisCredentials();
+async function redisGet(key) {
+  const { url, token } = getRedisConfig();
 
-  if (!url || !token) {
-    return null;
-  }
+  if (!url || !token) return null;
 
   try {
     const response = await fetch(
@@ -46,947 +32,332 @@ async function getRedisCache(key) {
       }
     );
 
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return null;
 
     const data = await response.json();
 
-    if (!data.result) {
-      return null;
-    }
+    if (!data.result) return null;
 
     return JSON.parse(data.result);
-  } catch (error) {
-    console.error('Redis GET failed:', error);
+  } catch {
     return null;
   }
 }
 
-/**
- * Write a value to Upstash Redis.
- */
-async function setRedisCache(
-  key,
-  value,
-  ttlSeconds = 86400
-) {
-  const { url, token } = getRedisCredentials();
+async function redisSet(key, value) {
+  const { url, token } = getRedisConfig();
 
-  if (!url || !token) {
-    return;
-  }
+  if (!url || !token) return;
 
   try {
-    const encodedValue = encodeURIComponent(
+    const encoded = encodeURIComponent(
       JSON.stringify(value)
     );
 
-    const response = await fetch(
-      `${url}/set/${encodeURIComponent(
-        key
-      )}/${encodedValue}?ex=${ttlSeconds}`,
+    await fetch(
+      `${url}/set/${encodeURIComponent(key)}/${encoded}?ex=${CACHE_TTL}`,
       {
         headers: {
           Authorization: `Bearer ${token}`
         }
       }
     );
-
-    if (!response.ok) {
-      console.error(
-        'Redis SET failed:',
-        response.status,
-        await response.text()
-      );
-    }
-  } catch (error) {
-    console.error('Redis SET failed:', error);
+  } catch {
+    // Cache failure must never break the timetable.
   }
 }
 
-/**
- * Determine whether an object contains a usable
- * BSUIR timetable.
- *
- * IMPORTANT:
- *
- * BSUIR can return:
- *
- * schedules: null
- * nextSchedules: { ...real lessons... }
- *
- * Therefore checking only schedules is WRONG.
- */
-function hasUsableSchedule(data) {
-  if (!data || typeof data !== 'object') {
+async function fetchJson(url) {
+  const controller = new AbortController();
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 15000);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent": "ScheduleHub/1.0"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function hasSchedules(schedules) {
+  if (
+    !schedules ||
+    typeof schedules !== "object"
+  ) {
     return false;
   }
 
-  const schedules =
-    data.schedules;
-
-  if (
-    schedules &&
-    typeof schedules === 'object' &&
-    Object.keys(schedules).length > 0
-  ) {
-    return true;
-  }
-
-  const nextSchedules =
-    data.nextSchedules;
-
-  if (
-    nextSchedules &&
-    typeof nextSchedules === 'object' &&
-    Object.keys(nextSchedules).length > 0
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Get the timetable that should be exposed to
- * the frontend/resolver.
- *
- * Current BSUIR behaviour:
- *
- * {
- *   schedules: null,
- *   nextSchedules: {
- *     Понедельник: [...],
- *     ...
- *   }
- * }
- *
- * Older responses may have schedules directly.
- */
-function getUsableSchedules(data) {
-  if (!data || typeof data !== 'object') {
-    return {};
-  }
-
-  if (
-    data.schedules &&
-    typeof data.schedules === 'object' &&
-    Object.keys(data.schedules).length > 0
-  ) {
-    return data.schedules;
-  }
-
-  if (
-    data.nextSchedules &&
-    typeof data.nextSchedules === 'object' &&
-    Object.keys(data.nextSchedules).length > 0
-  ) {
-    return data.nextSchedules;
-  }
-
-  return {};
-}
-
-/**
- * Convert BSUIR date strings into a Date safely.
- *
- * Supports:
- *   DD.MM.YYYY
- *   YYYY-MM-DD
- *   ISO datetime strings
- */
-function parseCalendarDate(value) {
-  if (!value) {
-    return null;
-  }
-
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) {
-      return null;
-    }
-
-    return new Date(
-      value.getFullYear(),
-      value.getMonth(),
-      value.getDate()
-    );
-  }
-
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    return null;
-  }
-
-  let match = trimmed.match(
-    /^(\d{2})\.(\d{2})\.(\d{4})/
-  );
-
-  if (match) {
-    const day = Number(match[1]);
-    const month = Number(match[2]);
-    const year = Number(match[3]);
-
-    const date = new Date(
-      year,
-      month - 1,
-      day
-    );
-
-    return Number.isNaN(date.getTime())
-      ? null
-      : date;
-  }
-
-  match = trimmed.match(
-    /^(\d{4})-(\d{2})-(\d{2})/
-  );
-
-  if (match) {
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-
-    const date = new Date(
-      year,
-      month - 1,
-      day
-    );
-
-    return Number.isNaN(date.getTime())
-      ? null
-      : date;
-  }
-
-  const parsed = new Date(trimmed);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return new Date(
-    parsed.getFullYear(),
-    parsed.getMonth(),
-    parsed.getDate()
+  return Object.values(schedules).some(
+    value =>
+      Array.isArray(value) &&
+      value.length > 0
   );
 }
 
-/**
- * Format a Date as YYYY-MM-DD.
- */
-function formatDateKey(value) {
-  const date = parseCalendarDate(value);
-
-  if (!date) {
-    return null;
-  }
-
-  const year =
-    date.getFullYear();
-
-  const month =
-    String(
-      date.getMonth() + 1
-    ).padStart(2, '0');
-
-  const day =
-    String(
-      date.getDate()
-    ).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
+function getMockData(group) {
+  return {
+    studentGroup: group,
+    schedules: {},
+    todaySchedules: [],
+    exams: [],
+    currentWeek: 1,
+    nextLesson: null
+  };
 }
 
-/**
- * Get today's local calendar date.
- */
-function getTodayDate() {
+function getMinutes(time) {
+  const match = String(time || "").match(
+    /^(\d{1,2}):(\d{2})/
+  );
+
+  if (!match) return null;
+
+  return (
+    Number(match[1]) * 60 +
+    Number(match[2])
+  );
+}
+
+function getNextLesson(lessons) {
   const now = new Date();
 
-  return new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
-}
+  const currentMinutes =
+    now.getHours() * 60 +
+    now.getMinutes();
 
-/**
- * Fetch the current BSUIR academic week.
- */
-async function fetchCurrentWeek() {
-  try {
-    const controller =
-      new AbortController();
+  for (const lesson of lessons) {
+    const normalized =
+      normalizeLesson(lesson);
 
-    const timeout =
-      setTimeout(() => {
-        controller.abort();
-      }, 5000);
-
-    const response =
-      await fetch(
-        'https://iis.bsuir.by/api/v1/schedule/current-week',
-        {
-          signal: controller.signal,
-          headers: {
-            Accept:
-              'application/json, text/plain, */*'
-          }
-        }
-      );
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const contentType =
-      response.headers.get(
-        'content-type'
-      ) || '';
-
-    if (
-      contentType.includes(
-        'application/json'
-      )
-    ) {
-      const value =
-        await response.json();
-
-      if (typeof value === 'number') {
-        return value;
-      }
-
-      const parsed =
-        parseInt(value, 10);
-
-      return Number.isNaN(parsed)
-        ? null
-        : parsed;
-    }
-
-    const text =
-      await response.text();
-
-    const parsed =
-      parseInt(
-        text.trim(),
-        10
-      );
-
-    return Number.isNaN(parsed)
-      ? null
-      : parsed;
-  } catch (error) {
-    console.error(
-      'Failed to fetch current BSUIR week:',
-      error
+    const start = getMinutes(
+      normalized.startLessonTime
     );
 
-    return null;
+    const end = getMinutes(
+      normalized.endLessonTime
+    );
+
+    if (start === null) continue;
+
+    if (
+      currentMinutes < start ||
+      (end !== null &&
+        currentMinutes < end)
+    ) {
+      return normalized;
+    }
   }
+
+  return null;
 }
-
-/**
- * Empty fallback.
- *
- * We never manufacture fake lessons.
- */
-const MOCK_SCHEDULE = {
-  studentGroupDto: {
-    name: 'unknown'
-  },
-
-  schedules: {},
-
-  nextSchedules: {},
-
-  exams: [],
-
-  startDate: null,
-
-  endDate: null,
-
-  startExamsDate: null,
-
-  endExamsDate: null
-};
 
 export default async function handler(
   req,
   res
 ) {
-  /*
-   * Allow Vercel/CDN to cache the API response.
-   *
-   * The actual Redis cache is also used below.
-   */
   res.setHeader(
-    'Cache-Control',
-    's-maxage=3600, stale-while-revalidate=86400'
+    "Cache-Control",
+    "s-maxage=3600, stale-while-revalidate=86400"
   );
 
-  /*
-   * ------------------------------------------------------------
-   * 1. READ GROUP
-   * ------------------------------------------------------------
-   */
-
   const group =
-    typeof req.query.group === 'string'
+    typeof req.query.group === "string"
       ? req.query.group.trim()
-      : '';
+      : "";
 
   if (!group) {
     return res.status(400).json({
       success: false,
       error:
-        'Missing required group parameter'
+        "Missing required group parameter"
     });
   }
 
   const cacheKey =
-    `schedule:${group}`;
+    `bsuir:schedule:${group}`;
 
-  let rawSchedule = null;
+  let scheduleResponse = null;
+  let currentWeek = null;
 
-  let isFromCache = false;
+  let cached = false;
+  let fallback = false;
+  let stale = false;
 
-  let isFallback = false;
-
-  let debugMessage = null;
+  const debug = {};
 
   /*
-   * ------------------------------------------------------------
-   * 2. FETCH BSUIR
-   * ------------------------------------------------------------
+   * Fetch both official BSUIR endpoints
+   * independently.
    */
-
   try {
-    const controller =
-      new AbortController();
-
-    const timeout =
-      setTimeout(() => {
-        controller.abort();
-      }, 15000);
-
-    const bsuirUrl =
-      'https://iis.bsuir.by/api/v1/schedule' +
-      '?studentGroup=' +
-      encodeURIComponent(group);
-
-    const bsuirResponse =
-      await fetch(
-        bsuirUrl,
-        {
-          signal:
-            controller.signal,
-
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-
-            Accept:
-              'application/json, text/plain, */*',
-
-            'Accept-Language':
-              'ru,en;q=0.9',
-
-            Referer:
-              'https://iis.bsuir.by/'
-          }
-        }
-      );
-
-    clearTimeout(timeout);
-
-    if (!bsuirResponse.ok) {
-      const errorText =
-        await bsuirResponse.text();
-
-      debugMessage = {
-        source: 'bsuir',
-
-        status:
-          bsuirResponse.status,
-
-        body:
-          errorText.substring(
-            0,
-            1500
-          )
-      };
-
-      console.error(
-        'BSUIR API returned:',
-        bsuirResponse.status,
-        errorText.substring(
-          0,
-          500
+    const [schedule, week] =
+      await Promise.all([
+        fetchJson(
+          `${API}/schedule?studentGroup=${encodeURIComponent(
+            group
+          )}`
+        ),
+        fetchJson(
+          `${API}/schedule/current-week`
         )
+      ]);
+
+    if (!hasSchedules(schedule?.schedules)) {
+      throw new Error(
+        "BSUIR returned an empty schedules object"
       );
-    } else {
-      const contentType =
-        bsuirResponse.headers.get(
-          'content-type'
-        ) || '';
-
-      if (
-        !contentType.includes(
-          'application/json'
-        )
-      ) {
-        debugMessage = {
-          source: 'bsuir',
-
-          error:
-            'BSUIR API returned a non-JSON response.'
-        };
-
-        console.error(
-          debugMessage.error
-        );
-      } else {
-        const responseData =
-          await bsuirResponse.json();
-
-        /*
-         * Keep the complete BSUIR response.
-         *
-         * DO NOT reduce it to rawSchedule.schedules.
-         *
-         * nextSchedules is important because BSUIR can
-         * legitimately return schedules: null.
-         */
-        rawSchedule =
-          responseData;
-
-        const usableSchedules =
-          getUsableSchedules(
-            rawSchedule
-          );
-
-        debugMessage = {
-          source: 'bsuir',
-
-          rawKeys:
-            rawSchedule &&
-            typeof rawSchedule ===
-              'object'
-              ? Object.keys(
-                  rawSchedule
-                )
-              : [],
-
-          scheduleSource:
-            rawSchedule?.schedules &&
-            Object.keys(
-              rawSchedule.schedules
-            ).length > 0
-              ? 'schedules'
-              : rawSchedule?.nextSchedules &&
-                  Object.keys(
-                    rawSchedule.nextSchedules
-                  ).length > 0
-                ? 'nextSchedules'
-                : 'none',
-
-          scheduleDayCount:
-            Object.keys(
-              usableSchedules
-            ).length,
-
-          studentGroup:
-            rawSchedule
-              ?.studentGroupDto
-              ?.name ||
-            group,
-
-          startDate:
-            rawSchedule?.startDate ||
-            null,
-
-          endDate:
-            rawSchedule?.endDate ||
-            null
-        };
-
-        /*
-         * Cache ANY response that contains a usable
-         * timetable source.
-         *
-         * This fixes the old bug where nextSchedules
-         * was valid but wasn't cached.
-         */
-        if (
-          hasUsableSchedule(
-            rawSchedule
-          )
-        ) {
-          await setRedisCache(
-            cacheKey,
-            rawSchedule,
-            86400
-          );
-        }
-      }
     }
-  } catch (error) {
-    debugMessage = {
-      source: 'bsuir',
-
-      error:
-        error?.message ||
-        String(error)
-    };
-
-    console.error(
-      'BSUIR API connection failed:',
-      error
-    );
-  }
-
-  /*
-   * ------------------------------------------------------------
-   * 3. REDIS FALLBACK
-   * ------------------------------------------------------------
-   *
-   * IMPORTANT:
-   * Cached nextSchedules are also valid.
-   */
-
-  if (
-    !rawSchedule ||
-    !hasUsableSchedule(
-      rawSchedule
-    )
-  ) {
-    const cachedSchedule =
-      await getRedisCache(
-        cacheKey
-      );
 
     if (
-      cachedSchedule &&
-      hasUsableSchedule(
-        cachedSchedule
+      !Number.isInteger(week) ||
+      week < 1 ||
+      week > 4
+    ) {
+      throw new Error(
+        "BSUIR returned an invalid current week"
+      );
+    }
+
+    scheduleResponse = schedule;
+    currentWeek = week;
+
+    await redisSet(cacheKey, {
+      schedule: scheduleResponse,
+      currentWeek
+    });
+
+    debug.source = "bsuir";
+  } catch (error) {
+    debug.liveError =
+      error?.message || String(error);
+  }
+
+  /*
+   * Live request failed:
+   * use Redis if it contains a real schedule.
+   */
+  if (
+    !scheduleResponse ||
+    !hasSchedules(
+      scheduleResponse.schedules
+    )
+  ) {
+    const cachedData =
+      await redisGet(cacheKey);
+
+    if (
+      cachedData?.schedule &&
+      hasSchedules(
+        cachedData.schedule.schedules
+      ) &&
+      Number.isInteger(
+        cachedData.currentWeek
       )
     ) {
-      rawSchedule =
-        cachedSchedule;
+      scheduleResponse =
+        cachedData.schedule;
 
-      isFromCache = true;
+      currentWeek =
+        cachedData.currentWeek;
 
-      debugMessage = {
-        ...(typeof debugMessage ===
-        'object'
-          ? debugMessage
-          : {}),
+      cached = true;
+      stale = true;
 
-        cache:
-          'Using cached BSUIR schedule',
-
-        scheduleSource:
-          cachedSchedule.schedules &&
-          Object.keys(
-            cachedSchedule.schedules
-          ).length > 0
-            ? 'schedules'
-            : cachedSchedule.nextSchedules &&
-                Object.keys(
-                  cachedSchedule.nextSchedules
-                ).length > 0
-              ? 'nextSchedules'
-              : 'none'
-      };
+      debug.source = "redis";
     }
   }
 
   /*
-   * ------------------------------------------------------------
-   * 4. FINAL FALLBACK
-   * ------------------------------------------------------------
-   */
-
-  if (!rawSchedule) {
-    rawSchedule =
-      MOCK_SCHEDULE;
-
-    isFallback = true;
-  }
-
-  /*
-   * If BSUIR returned an object but it had no usable
-   * timetable, do not pretend it is a live timetable.
+   * Nothing usable anywhere.
    */
   if (
-    !hasUsableSchedule(
-      rawSchedule
-    )
+    !scheduleResponse ||
+    !hasSchedules(
+      scheduleResponse.schedules
+    ) ||
+    !Number.isInteger(currentWeek)
   ) {
-    isFallback = true;
+    fallback = true;
+
+    return res.status(200).json({
+      success: true,
+      cached: false,
+      fallback: true,
+      stale: false,
+      debug,
+      data: getMockData(group)
+    });
   }
 
   /*
-   * ------------------------------------------------------------
-   * 5. GET ACTUAL TIMETABLE SOURCE
-   * ------------------------------------------------------------
-   *
-   * This is the crucial change:
-   *
-   * schedules OR nextSchedules.
+   * Resolve today's lessons using:
+   *   real calendar date
+   *   Russian weekday
+   *   current rotation week
+   *   subgroup
    */
+  const today =
+    new Date();
 
-  const usableSchedules =
-    getUsableSchedules(
-      rawSchedule
+  const todaySchedules =
+    resolveLessonsForDate(
+      scheduleResponse.schedules,
+      today,
+      currentWeek,
+      1
     );
 
-  /*
-   * ------------------------------------------------------------
-   * 6. CURRENT ACADEMIC WEEK
-   * ------------------------------------------------------------
-   */
-
-  const fetchedCurrentWeek =
-    await fetchCurrentWeek();
-
-  const resolvedWeek =
-    Number.isFinite(
-      Number(
-        fetchedCurrentWeek
-      )
-    ) &&
-    Number(
-      fetchedCurrentWeek
-    ) > 0
-      ? Number(
-          fetchedCurrentWeek
-        )
-      : Number(
-          rawSchedule?.currentWeek
-        ) || 1;
-
-  /*
-   * ------------------------------------------------------------
-   * 7. RESOLVE TODAY BY CALENDAR DATE
-   * ------------------------------------------------------------
-   *
-   * The resolver is now date-first.
-   *
-   * We deliberately pass the complete API-style object,
-   * not just schedules, because the resolver understands
-   * schedules/nextSchedules and date ranges.
-   */
-
-  const today =
-    getTodayDate();
-
-  let todayLessons = [];
-
-  if (
-    hasUsableSchedule(
-      rawSchedule
-    )
-  ) {
-    try {
-      const resolverInput = {
-        ...rawSchedule,
-
-        /*
-         * Keep schedules populated so the current
-         * ScheduleView/resolver can consume the returned
-         * `data.schedules` directly.
-         */
-        schedules:
-          usableSchedules
-      };
-
-      const resolved =
-        resolveLessonsForDate(
-          resolverInput,
-          today,
-          resolvedWeek,
-          0
-        );
-
-      todayLessons =
-        Array.isArray(
-          resolved
-        )
-          ? resolved.map(
-              normalizeLesson
-            )
-          : [];
-    } catch (error) {
-      console.error(
-        'Failed to resolve today lessons:',
-        error
-      );
-
-      debugMessage = {
-        ...(typeof debugMessage ===
-        'object'
-          ? debugMessage
-          : {}),
-
-        resolver: {
-          error:
-            error?.message ||
-            String(error)
-        }
-      };
-
-      /*
-       * Do not destroy the underlying timetable
-       * because only today's resolution failed.
-       */
-      todayLessons = [];
-    }
-  }
-
-  /*
-   * ------------------------------------------------------------
-   * 8. NEXT LESSON
-   * ------------------------------------------------------------
-   *
-   * Keep this conservative.
-   *
-   * ScheduleView can determine current/next status
-   * using the actual current time.
-   */
-
   const nextLesson =
-    todayLessons.length > 0
-      ? {
-          ...todayLessons[0]
-        }
-      : null;
+    getNextLesson(
+      todaySchedules
+    );
 
-  /*
-   * ------------------------------------------------------------
-   * 9. STATUS
-   * ------------------------------------------------------------
-   */
+  debug.studentGroup =
+    scheduleResponse
+      ?.studentGroupDto
+      ?.name || group;
 
-  let status = 'live';
-
-  if (isFallback) {
-    status = 'fallback';
-  } else if (isFromCache) {
-    status = 'cached';
-  }
-
-  /*
-   * ------------------------------------------------------------
-   * 10. RESPONSE
-   * ------------------------------------------------------------
-   *
-   * IMPORTANT:
-   *
-   * `schedules` now contains the REAL usable timetable,
-   * even when BSUIR originally called it `nextSchedules`.
-   *
-   * This keeps the frontend contract stable while fixing
-   * the backend source selection.
-   */
+  debug.scheduleDays =
+    Object.keys(
+      scheduleResponse.schedules
+    ).length;
 
   return res.status(200).json({
     success: true,
-
-    status,
-
-    cached:
-      isFromCache,
-
-    fallback:
-      isFallback,
-
-    stale:
-      isFromCache || isFallback,
-
-    debug:
-      debugMessage,
-
+    cached,
+    fallback,
+    stale,
+    debug,
     data: {
-      studentGroup:
-        rawSchedule
-          ?.studentGroupDto
-          ?.name ||
-        group,
+      studentGroup: group,
 
-      /*
-       * The frontend gets the usable timetable here.
-       *
-       * This is NOT necessarily rawSchedule.schedules.
-       * It may be rawSchedule.nextSchedules.
-       */
       schedules:
-        usableSchedules,
+        scheduleResponse.schedules,
 
-      /*
-       * Preserve nextSchedules too.
-       *
-       * Useful for debugging and future UI logic.
-       */
-      nextSchedules:
-        rawSchedule?.nextSchedules ||
-        {},
-
-      /*
-       * Preserve the original BSUIR schedules value.
-       */
-      rawSchedules:
-        rawSchedule?.schedules ||
-        null,
-
-      /*
-       * Calendar/term boundaries.
-       */
-      scheduleStartDate:
-        rawSchedule?.startDate ||
-        null,
-
-      scheduleEndDate:
-        rawSchedule?.endDate ||
-        null,
-
-      examsStartDate:
-        rawSchedule?.startExamsDate ||
-        null,
-
-      examsEndDate:
-        rawSchedule?.endExamsDate ||
-        null,
-
-      /*
-       * Useful canonical date for the frontend.
-       */
-      todayDate:
-        formatDateKey(today),
-
-      /*
-       * Lessons resolved specifically for today.
-       */
-      todaySchedules:
-        todayLessons,
+      todaySchedules,
 
       exams:
         Array.isArray(
-          rawSchedule?.exams
+          scheduleResponse.exams
         )
-          ? rawSchedule.exams
+          ? scheduleResponse.exams
           : [],
 
-      currentWeek:
-        resolvedWeek,
+      currentWeek,
 
       nextLesson
     }
