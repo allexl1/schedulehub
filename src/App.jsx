@@ -397,19 +397,20 @@ function AppContent() {
               themeMode
             }
             setThemeMode={
-              newTheme => {
-                setThemeMode(
-                  newTheme
-                );
+  newTheme => {
+    setThemeMode(
+      newTheme
+    );
 
-                localStorage.setItem(
-                  'sh_theme',
-                  newTheme
-                );
-              }
-              onClearCache={() => {
-  clearScheduleCache(group);
+    localStorage.setItem(
+      'sh_theme',
+      newTheme
+    );
+  }
 }
+onClearCache={() => {
+  clearScheduleCache(group);
+}}
             }
           />
         )}
