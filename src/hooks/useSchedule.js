@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
 import {
-  EMPTY_SCHEDULE_DATA,
-  getSchedule,
+  EMPTY_DATA,
+  loadGroupSchedule,
   readCachedSchedule,
   readCacheTimestamp,
   saveCachedSchedule,
@@ -38,7 +38,7 @@ export function useSchedule({
     () =>
       readCachedSchedule(group) ||
       {
-        ...EMPTY_SCHEDULE_DATA
+        ...EMPTY_DATA
       }
   );
 
@@ -63,7 +63,7 @@ export function useSchedule({
 
       if (!normalizedGroup) {
         setScheduleData({
-          ...EMPTY_SCHEDULE_DATA
+          ...EMPTY_DATA
         });
 
         setLastUpdated(null);
@@ -98,7 +98,7 @@ export function useSchedule({
         );
       } else {
         setScheduleData({
-          ...EMPTY_SCHEDULE_DATA
+          ...EMPTY_DATA
         });
 
         setLastUpdated(null);
@@ -145,7 +145,7 @@ export function useSchedule({
 
 
         const response =
-          await getSchedule(
+          await loadGroupSchedule(
             normalizedGroup,
             normalizedSubgroup
           );
