@@ -1,12 +1,10 @@
-import {
-  resolveLessonsForDate,
-  normalizeLesson
-} from "../../src/utils/scheduleResolver.js";
+import { resolveLessonsForDate } from "../../src/utils/scheduleResolver.js";
 
 const API = "https://iis.bsuir.by/api/v1";
 const CACHE_TTL = 86400;
+const TIMEOUT = 10000;
 
-function getRedisConfig() {
+function redisConfig() {
   return {
     url:
       process.env.UPSTASH_REDIS_REST_URL ||
@@ -18,7 +16,7 @@ function getRedisConfig() {
 }
 
 async function redisGet(key) {
-  const { url, token } = getRedisConfig();
+  const { url, token } = redisConfig();
 
   if (!url || !token) return null;
 
@@ -34,18 +32,18 @@ async function redisGet(key) {
 
     if (!response.ok) return null;
 
-    const data = await response.json();
+    const json = await response.json();
 
-    if (!data.result) return null;
+    if (!json.result) return null;
 
-    return JSON.parse(data.result);
+    return JSON.parse(json.result);
   } catch {
     return null;
   }
 }
 
 async function redisSet(key, value) {
-  const { url, token } = getRedisConfig();
+  const { url, token } = redisConfig();
 
   if (!url || !token) return;
 
@@ -63,16 +61,16 @@ async function redisSet(key, value) {
       }
     );
   } catch {
-    // Cache failure must never break the timetable.
+    // Redis failure must never break the timetable.
   }
 }
 
 async function fetchJson(url) {
   const controller = new AbortController();
 
-  const timeout = setTimeout(() => {
+  const timer = setTimeout(() => {
     controller.abort();
-  }, 15000);
+  }, TIMEOUT);
 
   try {
     const response = await fetch(url, {
@@ -89,7 +87,7 @@ async function fetchJson(url) {
 
     return await response.json();
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timer);
   }
 }
 
@@ -108,7 +106,19 @@ function hasSchedules(schedules) {
   );
 }
 
-function getMockData(group) {
+function validWeek(value) {
+  const week = Number(value);
+
+  return (
+    Number.isInteger(week) &&
+    week >= 1 &&
+    week <= 4
+  )
+    ? week
+    : null;
+}
+
+function mockData(group) {
   return {
     studentGroup: group,
     schedules: {},
@@ -140,35 +150,22 @@ function getNextLesson(lessons) {
     now.getMinutes();
 
   for (const lesson of lessons) {
-    const normalized =
-      normalizeLesson(lesson);
-
     const start = getMinutes(
-      normalized.startLessonTime
+      lesson.startLessonTime
     );
-
-    const end = getMinutes(
-      normalized.endLessonTime
-    );
-
-    if (start === null) continue;
 
     if (
-      currentMinutes < start ||
-      (end !== null &&
-        currentMinutes < end)
+      start !== null &&
+      start > currentMinutes
     ) {
-      return normalized;
+      return lesson;
     }
   }
 
   return null;
 }
 
-export default async function handler(
-  req,
-  res
-) {
+export default async function handler(req, res) {
   res.setHeader(
     "Cache-Control",
     "s-maxage=3600, stale-while-revalidate=86400"
@@ -182,97 +179,112 @@ export default async function handler(
   if (!group) {
     return res.status(400).json({
       success: false,
-      error:
-        "Missing required group parameter"
+      error: "Missing required group parameter"
     });
   }
 
   const cacheKey =
     `bsuir:schedule:${group}`;
 
-  let scheduleResponse = null;
-  let currentWeek = null;
+  let liveSchedule = null;
+  let liveWeek = null;
 
   let cached = false;
   let fallback = false;
   let stale = false;
 
-  const debug = {};
+  const debug = {
+    group
+  };
 
   /*
-   * Fetch both official BSUIR endpoints
-   * independently.
+   * These requests are intentionally independent.
+   *
+   * A current-week outage must NOT discard
+   * a perfectly good schedule response.
    */
+  const schedulePromise = fetchJson(
+    `${API}/schedule?studentGroup=${encodeURIComponent(
+      group
+    )}`
+  );
+
+  const weekPromise = fetchJson(
+    `${API}/schedule/current-week`
+  );
+
   try {
-    const [schedule, week] =
-      await Promise.all([
-        fetchJson(
-          `${API}/schedule?studentGroup=${encodeURIComponent(
-            group
-          )}`
-        ),
-        fetchJson(
-          `${API}/schedule/current-week`
-        )
-      ]);
+    const schedule = await schedulePromise;
 
     if (!hasSchedules(schedule?.schedules)) {
       throw new Error(
-        "BSUIR returned an empty schedules object"
+        "BSUIR returned no schedule data"
       );
     }
 
-    if (
-      !Number.isInteger(week) ||
-      week < 1 ||
-      week > 4
-    ) {
+    liveSchedule = schedule;
+    debug.schedule = "ok";
+  } catch (error) {
+    debug.schedule =
+      error?.message || String(error);
+  }
+
+  try {
+    const week = await weekPromise;
+
+    liveWeek = validWeek(week);
+
+    if (!liveWeek) {
       throw new Error(
         "BSUIR returned an invalid current week"
       );
     }
 
-    scheduleResponse = schedule;
-    currentWeek = week;
-
-    await redisSet(cacheKey, {
-      schedule: scheduleResponse,
-      currentWeek
-    });
-
-    debug.source = "bsuir";
+    debug.currentWeek = "ok";
   } catch (error) {
-    debug.liveError =
+    debug.currentWeek =
       error?.message || String(error);
   }
 
   /*
-   * Live request failed:
-   * use Redis if it contains a real schedule.
+   * If we have a live schedule, keep it even when
+   * current-week failed. Try Redis only for the
+   * missing week in that situation.
    */
-  if (
-    !scheduleResponse ||
-    !hasSchedules(
-      scheduleResponse.schedules
-    )
-  ) {
-    const cachedData =
-      await redisGet(cacheKey);
+  let cachedData = null;
+
+  if (liveSchedule && !liveWeek) {
+    cachedData = await redisGet(cacheKey);
+
+    const cachedWeek =
+      validWeek(cachedData?.currentWeek);
+
+    if (cachedWeek) {
+      liveWeek = cachedWeek;
+      debug.currentWeekSource = "redis";
+    }
+  }
+
+  /*
+   * If the live schedule itself failed, Redis becomes
+   * the complete fallback source.
+   */
+  if (!liveSchedule) {
+    cachedData = await redisGet(cacheKey);
 
     if (
       cachedData?.schedule &&
       hasSchedules(
         cachedData.schedule.schedules
-      ) &&
-      Number.isInteger(
-        cachedData.currentWeek
       )
     ) {
-      scheduleResponse =
+      liveSchedule =
         cachedData.schedule;
 
-      currentWeek =
-        cachedData.currentWeek;
+      liveWeek =
+        validWeek(
+          cachedData.currentWeek
+        );
 
       cached = true;
       stale = true;
@@ -282,14 +294,16 @@ export default async function handler(
   }
 
   /*
-   * Nothing usable anywhere.
+   * A schedule without a valid week is still not
+   * safe to resolve because weekNumber filtering
+   * would be incorrect.
    */
   if (
-    !scheduleResponse ||
+    !liveSchedule ||
     !hasSchedules(
-      scheduleResponse.schedules
+      liveSchedule.schedules
     ) ||
-    !Number.isInteger(currentWeek)
+    !validWeek(liveWeek)
   ) {
     fallback = true;
 
@@ -299,41 +313,40 @@ export default async function handler(
       fallback: true,
       stale: false,
       debug,
-      data: getMockData(group)
+      data: mockData(group)
     });
   }
 
   /*
-   * Resolve today's lessons using:
-   *   real calendar date
-   *   Russian weekday
-   *   current rotation week
-   *   subgroup
+   * Only successful live schedule + valid week
+   * responses are written to Redis.
    */
-  const today =
-    new Date();
+  if (!cached) {
+    await redisSet(cacheKey, {
+      schedule: liveSchedule,
+      currentWeek: liveWeek
+    });
+  }
+
+  const today = new Date();
 
   const todaySchedules =
     resolveLessonsForDate(
-      scheduleResponse.schedules,
+      liveSchedule.schedules,
       today,
-      currentWeek,
+      liveWeek,
       1
     );
 
   const nextLesson =
-    getNextLesson(
-      todaySchedules
-    );
+    getNextLesson(todaySchedules);
 
-  debug.studentGroup =
-    scheduleResponse
-      ?.studentGroupDto
-      ?.name || group;
+  debug.source =
+    cached ? "redis" : "bsuir";
 
   debug.scheduleDays =
     Object.keys(
-      scheduleResponse.schedules
+      liveSchedule.schedules
     ).length;
 
   return res.status(200).json({
@@ -346,18 +359,18 @@ export default async function handler(
       studentGroup: group,
 
       schedules:
-        scheduleResponse.schedules,
+        liveSchedule.schedules,
 
       todaySchedules,
 
       exams:
         Array.isArray(
-          scheduleResponse.exams
+          liveSchedule.exams
         )
-          ? scheduleResponse.exams
+          ? liveSchedule.exams
           : [],
 
-      currentWeek,
+      currentWeek: liveWeek,
 
       nextLesson
     }
