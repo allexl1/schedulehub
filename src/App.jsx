@@ -406,10 +406,10 @@ function AppContent() {
                   'sh_theme',
                   newTheme
                 );
-              }}
+              }
               onClearCache={() => {
   clearScheduleCache(group);
-}}
+}
             }
           />
         )}
