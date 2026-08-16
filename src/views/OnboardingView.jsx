@@ -4,10 +4,10 @@ import Icon from '../components/common/Icon';
 
 export default function OnboardingView({ onComplete }) {
   const [step, setStep] = useState(1);
-  const [selectedGroup, setSelectedGroup] = useState('150501');
+  const [selectedGroup, setSelectedGroup] = useState('');
   const [selectedSubgroup, setSelectedSubgroup] = useState(1);
 
-  const popularGroups = ['150501', '150502', '150503', '250501', '250502'];
+  const popularGroups = ['373902', '361401', '473904', '373901', '373905'];
 
   const handleNext = () => {
     if (step < 3) {
@@ -55,7 +55,7 @@ export default function OnboardingView({ onComplete }) {
                 type="text"
                 value={selectedGroup}
                 onChange={(e) => setSelectedGroup(e.target.value)}
-                placeholder="150501"
+                placeholder="Enter your group number"
                 className="w-full bg-black/10 dark:bg-white/5 border border-[var(--border-glass)] rounded-xl px-4 py-3 text-lg font-bold text-[var(--text-primary)] outline-none focus:border-[#2997ff]"
               />
             </GlassCard>
