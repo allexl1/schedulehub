@@ -8,21 +8,59 @@ import {
   parseTimeRange
 } from '../utils/time';
 
-import {
-  resolveLessonsForDate,
-  resolveLessonsForWeekday
-} from '../utils/scheduleResolver';
+import { resolveLessonsForDate } from '../utils/scheduleResolver';
 
-const DAYS = [
-  { key: 'Mon', label: 'Mon' },
-  { key: 'Tue', label: 'Tue' },
-  { key: 'Wed', label: 'Wed' },
-  { key: 'Thu', label: 'Thu' },
-  { key: 'Fri', label: 'Fri' },
-  { key: 'Sat', label: 'Sat' }
+const WEEKDAYS = [
+  { key: 1, label: 'Mon' },
+  { key: 2, label: 'Tue' },
+  { key: 3, label: 'Wed' },
+  { key: 4, label: 'Thu' },
+  { key: 5, label: 'Fri' },
+  { key: 6, label: 'Sat' }
 ];
 
-function getTodayKey(date) {
+function startOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+
+  d.setDate(d.getDate() + mondayOffset);
+  d.setHours(0, 0, 0, 0);
+
+  return d;
+}
+
+function addDays(date, amount) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + amount);
+  return d;
+}
+
+function sameDate(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function formatDate(date) {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function formatFullDate(date) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
+function getPersonalDayKey(date) {
   const day = date.getDay();
 
   if (day === 1) return 'Mon';
@@ -35,29 +73,14 @@ function getTodayKey(date) {
   return 'Sun';
 }
 
-function getLessonsForDay(
-  schedules,
-  selectedDay,
-  currentWeek,
-  subgroup
-) {
-  if (selectedDay === getTodayKey(new Date())) {
-    return resolveLessonsForDate(
-      schedules,
-      new Date(),
-      currentWeek,
-      subgroup
-    );
+function getInitialDate() {
+  const today = new Date();
+
+  if (today.getDay() === 0) {
+    return addDays(today, -1);
   }
 
-  const result = resolveLessonsForWeekday(
-    schedules,
-    selectedDay,
-    currentWeek,
-    subgroup
-  );
-
-  return Object.values(result).flat();
+  return today;
 }
 
 export default function ScheduleView({
@@ -67,12 +90,9 @@ export default function ScheduleView({
   onLessonClick
 }) {
   const [now, setNow] = useState(() => new Date());
-
-  const [selectedDay, setSelectedDay] = useState(() => {
-    const today = getTodayKey(new Date());
-
-    return today === 'Sun' ? 'Mon' : today;
-  });
+  const [selectedDate, setSelectedDate] = useState(
+    getInitialDate
+  );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
@@ -90,71 +110,98 @@ export default function ScheduleView({
   });
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const timer = setInterval(() => {
       setNow(new Date());
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(timer);
   }, []);
 
+  /*
+   * Support both:
+   *
+   * scheduleData.data.schedules
+   * and the older top-level shape.
+   */
+  const data = scheduleData?.data || scheduleData || {};
+
   const schedules =
-    scheduleData?.schedules &&
-    typeof scheduleData.schedules === 'object'
-      ? scheduleData.schedules
+    data?.schedules &&
+    typeof data.schedules === 'object'
+      ? data.schedules
       : {};
 
-  const exams = Array.isArray(scheduleData?.exams)
-    ? scheduleData.exams
+  const exams = Array.isArray(data?.exams)
+    ? data.exams
     : [];
 
   const currentWeek =
-    Number(scheduleData?.currentWeek) >= 1 &&
-    Number(scheduleData?.currentWeek) <= 4
-      ? Number(scheduleData.currentWeek)
+    Number(data?.currentWeek) >= 1 &&
+    Number(data?.currentWeek) <= 4
+      ? Number(data.currentWeek)
       : 1;
 
-  const todayDay = getTodayKey(now);
-
-  const isSelectedDayToday =
-    selectedDay === todayDay;
-
   const hasScheduleData =
-    Object.keys(schedules).length > 0;
-
-  const dayPersonalEvents = useMemo(() => {
-    return personalEvents.filter(
-      event => event.day === selectedDay
+    Object.values(schedules).some(
+      value =>
+        Array.isArray(value) &&
+        value.length > 0
     );
-  }, [personalEvents, selectedDay]);
 
-  const academicLessons = useMemo(() => {
-    return getLessonsForDay(
+  const weekStart = useMemo(
+    () => startOfWeek(selectedDate),
+    [selectedDate]
+  );
+
+  const weekDates = useMemo(() => {
+    return WEEKDAYS.map(day => ({
+      ...day,
+      date: addDays(weekStart, day.key - 1)
+    }));
+  }, [weekStart]);
+
+  const selectedDayKey =
+    getPersonalDayKey(selectedDate);
+
+  const selectedLessons = useMemo(() => {
+    return resolveLessonsForDate(
       schedules,
-      selectedDay,
+      selectedDate,
       currentWeek,
       subgroup
     );
   }, [
     schedules,
-    selectedDay,
+    selectedDate,
     currentWeek,
     subgroup
   ]);
 
+  const selectedPersonalEvents = useMemo(() => {
+    return personalEvents.filter(
+      event => event.day === selectedDayKey
+    );
+  }, [
+    personalEvents,
+    selectedDayKey
+  ]);
+
   const processedSchedule = useMemo(() => {
     const combined = [
-      ...academicLessons,
-      ...dayPersonalEvents
+      ...selectedLessons,
+      ...selectedPersonalEvents
     ];
 
-    const sorted = combined.sort((a, b) => {
-      return (
+    const sorted = [...combined].sort(
+      (a, b) =>
         parseStartTimeInMinutes(a.time) -
         parseStartTimeInMinutes(b.time)
-      );
-    });
+    );
 
-    let foundNext = false;
+    const selectedIsToday =
+      sameDate(selectedDate, now);
+
+    let nextFound = false;
 
     return sorted.map(item => {
       if (item.isPersonal) {
@@ -172,12 +219,12 @@ export default function ScheduleView({
       let status = rawStatus;
 
       if (
+        selectedIsToday &&
         rawStatus === 'upcoming' &&
-        !foundNext &&
-        isSelectedDayToday
+        !nextFound
       ) {
         status = 'next';
-        foundNext = true;
+        nextFound = true;
       }
 
       if (rawStatus === 'current') {
@@ -194,11 +241,40 @@ export default function ScheduleView({
       };
     });
   }, [
-    academicLessons,
-    dayPersonalEvents,
-    now,
-    isSelectedDayToday
+    selectedLessons,
+    selectedPersonalEvents,
+    selectedDate,
+    now
   ]);
+
+  const selectedExamCount = useMemo(() => {
+    return exams.filter(exam => {
+      if (!exam?.date) return false;
+
+      const examDate = new Date(exam.date);
+
+      return (
+        !Number.isNaN(examDate.getTime()) &&
+        sameDate(examDate, selectedDate)
+      );
+    }).length;
+  }, [exams, selectedDate]);
+
+  const goToToday = () => {
+    setSelectedDate(getInitialDate());
+  };
+
+  const goPreviousWeek = () => {
+    setSelectedDate(
+      addDays(selectedDate, -7)
+    );
+  };
+
+  const goNextWeek = () => {
+    setSelectedDate(
+      addDays(selectedDate, 7)
+    );
+  };
 
   const handleOpenCreateModal = () => {
     setEditingEvent(null);
@@ -266,6 +342,7 @@ export default function ScheduleView({
   return (
     <div className="space-y-5">
 
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
@@ -285,31 +362,66 @@ export default function ScheduleView({
         </button>
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {DAYS.map(day => {
-          const isToday =
-            day.key === todayDay;
+      {/* Calendar controls */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={goPreviousWeek}
+          className="px-3 py-2 rounded-xl bg-[var(--surface-glass)] text-[var(--text-secondary)] text-xs font-bold"
+        >
+          Prev
+        </button>
 
+        <button
+          type="button"
+          onClick={goToToday}
+          className="px-3 py-2 rounded-xl bg-[#2997ff]/10 text-[#2997ff] text-xs font-bold"
+        >
+          Today
+        </button>
+
+        <button
+          type="button"
+          onClick={goNextWeek}
+          className="px-3 py-2 rounded-xl bg-[var(--surface-glass)] text-[var(--text-secondary)] text-xs font-bold"
+        >
+          Next
+        </button>
+      </div>
+
+      {/* Calendar week */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {weekDates.map(day => {
           const isSelected =
-            day.key === selectedDay;
+            sameDate(day.date, selectedDate);
+
+          const isToday =
+            sameDate(day.date, now);
 
           return (
             <button
               key={day.key}
+              type="button"
               onClick={() =>
-                setSelectedDay(day.key)
+                setSelectedDate(day.date)
               }
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all text-center min-w-[50px] ${
+              className={`flex-1 min-w-[52px] py-2 px-2 rounded-xl text-center transition-all ${
                 isSelected
                   ? 'bg-[#2997ff] text-white shadow-sm'
                   : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
               }`}
             >
-              <span>{day.label}</span>
+              <span className="block text-[10px] font-bold">
+                {day.label}
+              </span>
+
+              <span className="block text-sm font-extrabold mt-0.5">
+                {day.date.getDate()}
+              </span>
 
               {isToday && (
                 <span
-                  className={`block text-[9px] font-normal ${
+                  className={`block text-[8px] font-medium mt-0.5 ${
                     isSelected
                       ? 'text-white/80'
                       : 'text-[#2997ff]'
@@ -323,6 +435,25 @@ export default function ScheduleView({
         })}
       </div>
 
+      {/* Date / week information */}
+      <div className="flex justify-between items-center px-0.5">
+        <div>
+          <p className="text-sm font-bold text-[var(--text-primary)]">
+            {formatFullDate(selectedDate)}
+          </p>
+
+          <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
+            Week {currentWeek} - {formatDate(weekStart)} to{' '}
+            {formatDate(addDays(weekStart, 5))}
+          </p>
+        </div>
+
+        <span className="text-[10px] font-medium text-[var(--text-secondary)]">
+          {processedSchedule.length} items
+        </span>
+      </div>
+
+      {/* Data warning */}
       {!loading && !hasScheduleData && (
         <div className="p-3 rounded-xl bg-[#f59e0b]/10 border border-[#f59e0b]/20 text-xs text-[#f59e0b]">
           Academic timetable data is not loaded.
@@ -331,31 +462,14 @@ export default function ScheduleView({
         </div>
       )}
 
-      {hasScheduleData && (
-        <div className="flex justify-between items-center px-0.5">
-          <span className="text-[10px] font-medium text-[var(--text-secondary)]">
-            Week {currentWeek}
-          </span>
-
-          <span className="text-[10px] font-medium text-[var(--text-secondary)]">
-            {selectedDay}
-          </span>
-        </div>
-      )}
-
-      <div className="flex justify-between items-center px-0.5">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-          {selectedDay} Agenda ({processedSchedule.length})
-        </h3>
-      </div>
-
+      {/* Schedule */}
       {loading ? (
         <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
           Loading timetable...
         </div>
       ) : processedSchedule.length > 0 ? (
         <div className="bg-[var(--surface-glass)] rounded-2xl overflow-hidden divide-y divide-[var(--border-glass)]">
-          {processedSchedule.map((item, idx) => {
+          {processedSchedule.map((item, index) => {
             const isPast =
               item.status === 'past';
 
@@ -388,7 +502,7 @@ export default function ScheduleView({
 
             return (
               <div
-                key={item.id || idx}
+                key={item.id || index}
                 onClick={() =>
                   onLessonClick?.(item)
                 }
@@ -402,7 +516,8 @@ export default function ScheduleView({
                     : ''
                 }`}
               >
-                <div className="w-24 shrink-0 font-mono">
+                {/* Time */}
+                <div className="w-20 shrink-0 font-mono">
                   <span
                     className={`block text-xs font-bold ${
                       isInProgress
@@ -415,11 +530,12 @@ export default function ScheduleView({
                     {startTime}
                   </span>
 
-                  <span className="block text-[10px] text-[var(--text-secondary)] font-medium">
+                  <span className="block text-[10px] text-[var(--text-secondary)]">
                     {endTime}
                   </span>
                 </div>
 
+                {/* Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <h4
@@ -458,8 +574,8 @@ export default function ScheduleView({
                       </span>
                     ) : (
                       <>
-                        Room {item.room} {'\u2022'}{' '}
-                        {item.teacher}
+                        Room {item.room || '-'} {'\u2022'}{' '}
+                        {item.teacher || '-'}
                       </>
                     )}
                   </p>
@@ -472,13 +588,14 @@ export default function ScheduleView({
                     )}
                 </div>
 
-                <div className="text-right shrink-0 flex items-center gap-1.5">
+                {/* Type / actions */}
+                <div className="text-right shrink-0">
                   <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                    {item.type || 'Lecture'}
+                    {item.type || 'Lesson'}
                   </span>
 
                   {item.isPersonal && (
-                    <div className="flex items-center gap-1 ml-1">
+                    <div className="flex items-center gap-1 mt-1">
                       <button
                         type="button"
                         onClick={event => {
@@ -499,7 +616,7 @@ export default function ScheduleView({
                           handleDeleteEvent(item.id);
                         }}
                         className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#ff3b30] hover:bg-white/10 transition-colors"
-                        title="Delete personal event"
+                        title="Delete event"
                         aria-label="Delete personal event"
                       >
                         Delete
@@ -513,7 +630,14 @@ export default function ScheduleView({
         </div>
       ) : (
         <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
-          No classes or events scheduled for {selectedDay}.
+          No classes or events scheduled for this date.
+        </div>
+      )}
+
+      {selectedExamCount > 0 && (
+        <div className="p-3 rounded-xl bg-[#2997ff]/10 text-xs text-[#2997ff]">
+          {selectedExamCount} exam
+          {selectedExamCount === 1 ? '' : 's'} on this date.
         </div>
       )}
 
