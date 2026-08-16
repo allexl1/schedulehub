@@ -1,4 +1,7 @@
-import { resolveLessonsForDate } from "../../src/utils/scheduleResolver.js";
+import {
+  resolveLessonsForDate,
+  getNextLesson
+} from "../../src/utils/scheduleResolver.js";
 
 const API = "https://iis.bsuir.by/api/v1";
 const TIMEOUT = 10000;
@@ -32,11 +35,11 @@ async function redisGet(key) {
 
     if (!response.ok) return null;
 
-    const json = await response.json();
+    const result = await response.json();
 
-    if (!json.result) return null;
+    if (!result.result) return null;
 
-    return JSON.parse(json.result);
+    return JSON.parse(result.result);
   } catch {
     return null;
   }
@@ -61,7 +64,7 @@ async function redisSet(key, value) {
       }
     );
   } catch {
-    // Cache failures must never break the API.
+    // Redis is optional. Never fail the API because cache failed.
   }
 }
 
@@ -93,10 +96,7 @@ async function fetchJson(url) {
 }
 
 function hasSchedules(schedules) {
-  if (
-    !schedules ||
-    typeof schedules !== "object"
-  ) {
+  if (!schedules || typeof schedules !== "object") {
     return false;
   }
 
@@ -110,52 +110,16 @@ function hasSchedules(schedules) {
 function validWeek(value) {
   const week = Number(value);
 
-  if (
-    Number.isInteger(week) &&
+  return Number.isInteger(week) &&
     week >= 1 &&
     week <= 4
-  ) {
-    return week;
-  }
-
-  return null;
+    ? week
+    : null;
 }
 
-function getStartMinutes(lesson) {
-  const value =
-    lesson?.startLessonTime || "";
-
-  const match = String(value).match(
-    /^(\d{1,2}):(\d{2})/
-  );
-
-  if (!match) return Number.MAX_SAFE_INTEGER;
-
-  return (
-    Number(match[1]) * 60 +
-    Number(match[2])
-  );
-}
-
-function getNextLesson(lessons) {
-  const now = new Date();
-
-  const currentMinutes =
-    now.getHours() * 60 +
-    now.getMinutes();
-
-  return (
-    lessons.find(
-      lesson =>
-        getStartMinutes(lesson) >
-        currentMinutes
-    ) || null
-  );
-}
-
-function fallbackData(group) {
+function fallbackData(studentGroup) {
   return {
-    studentGroup: group,
+    studentGroup,
     schedules: {},
     todaySchedules: [],
     exams: [],
@@ -170,97 +134,85 @@ export default async function handler(req, res) {
     "s-maxage=3600, stale-while-revalidate=86400"
   );
 
-  const group =
+  const studentGroup =
     typeof req.query.group === "string"
       ? req.query.group.trim()
       : "";
 
-  if (!group) {
+  if (!studentGroup) {
     return res.status(400).json({
       success: false,
-      error: "Missing required group parameter"
+      cached: false,
+      fallback: false,
+      stale: false,
+      debug: {
+        error: "Missing group parameter"
+      },
+      data: null
     });
   }
 
   const scheduleKey =
-    `bsuir:schedule:${group}`;
+    `bsuir:schedule:${studentGroup}`;
 
   const weekKey =
     "bsuir:current-week";
 
   const debug = {
-    group,
-    schedule: null,
-    currentWeek: null,
-    source: null
+    group: studentGroup,
+    scheduleSource: null,
+    weekSource: null
   };
 
-  let schedule = null;
+  let scheduleData = null;
   let currentWeek = null;
 
   let cached = false;
-  let fallback = false;
   let stale = false;
 
-  /*
-   * Fetch both endpoints independently.
-   * A failure of one must not destroy the other.
-   */
-  const [scheduleResult, weekResult] =
-    await Promise.allSettled([
-      fetchJson(
-        `${API}/schedule?studentGroup=${encodeURIComponent(group)}`
-      ),
-      fetchJson(
-        `${API}/schedule/current-week`
-      )
-    ]);
+  const results = await Promise.allSettled([
+    fetchJson(
+      `${API}/schedule?studentGroup=${encodeURIComponent(studentGroup)}`
+    ),
+    fetchJson(
+      `${API}/schedule/current-week`
+    )
+  ]);
 
-  /*
-   * Live schedule.
-   */
+  const scheduleResult = results[0];
+  const weekResult = results[1];
+
   if (
     scheduleResult.status === "fulfilled" &&
     hasSchedules(
       scheduleResult.value?.schedules
     )
   ) {
-    schedule = scheduleResult.value;
-    debug.schedule = "ok";
+    scheduleData = scheduleResult.value;
+    debug.scheduleSource = "bsuir";
   } else {
-    debug.schedule =
+    debug.scheduleSource =
       scheduleResult.status === "rejected"
-        ? scheduleResult.reason?.message ||
-          String(scheduleResult.reason)
-        : "BSUIR returned no schedule data";
+        ? "bsuir-error"
+        : "bsuir-empty";
   }
 
-  /*
-   * Live current rotation week.
-   */
-  if (
-    weekResult.status === "fulfilled"
-  ) {
+  if (weekResult.status === "fulfilled") {
     currentWeek = validWeek(
       weekResult.value
     );
   }
 
   if (currentWeek) {
-    debug.currentWeek = "ok";
+    debug.weekSource = "bsuir";
   } else {
-    debug.currentWeek =
+    debug.weekSource =
       weekResult.status === "rejected"
-        ? weekResult.reason?.message ||
-          String(weekResult.reason)
-        : "BSUIR returned an invalid current week";
+        ? "bsuir-error"
+        : "bsuir-invalid";
   }
 
-  /*
-   * If the live schedule failed, recover it
-   * from Redis.
-   */
-  if (!schedule) {
+  if (!scheduleData) {
     const cachedSchedule =
       await redisGet(scheduleKey);
 
@@ -270,73 +222,58 @@ export default async function handler(req, res) {
         cachedSchedule.schedules
       )
     ) {
-      schedule = cachedSchedule;
+      scheduleData = cachedSchedule;
       cached = true;
       stale = true;
-      debug.source = "redis-schedule";
+      debug.scheduleSource = "redis";
     }
   }
 
-  /*
-   * If the live current-week request failed,
-   * recover the week independently from Redis.
-   */
   if (!currentWeek) {
     const cachedWeek =
       await redisGet(weekKey);
 
-    const recoveredWeek =
-      validWeek(
-        cachedWeek?.currentWeek ??
-        cachedWeek
-      );
+    const cachedValue =
+      cachedWeek?.currentWeek ??
+      cachedWeek;
 
-    if (recoveredWeek) {
-      currentWeek = recoveredWeek;
+    currentWeek =
+      validWeek(cachedValue);
+
+    if (currentWeek) {
       cached = true;
       stale = true;
-      debug.currentWeekSource =
-        "redis";
+      debug.weekSource = "redis";
     }
   }
 
-  /*
-   * We cannot safely resolve rotating lessons
-   * without both schedule data and a valid week.
-   */
   if (
-    !schedule ||
+    !scheduleData ||
     !hasSchedules(
-      schedule.schedules
+      scheduleData.schedules
     ) ||
     !currentWeek
   ) {
-    fallback = true;
-    debug.source = "fallback";
-
     return res.status(200).json({
       success: true,
       cached: false,
       fallback: true,
       stale: false,
-      debug,
-      data: fallbackData(group)
+      debug: {
+        ...debug,
+        source: "fallback"
+      },
+      data: fallbackData(studentGroup)
     });
   }
 
-  /*
-   * Cache only real schedule data.
-   */
   if (!cached) {
     await redisSet(
       scheduleKey,
-      schedule
+      scheduleData
     );
   }
 
-  /*
-   * Cache the current week independently.
-   */
   if (
     weekResult.status === "fulfilled" &&
     validWeek(weekResult.value)
@@ -349,52 +286,50 @@ export default async function handler(req, res) {
     );
   }
 
-  const today = new Date();
+  const now = new Date();
 
   const todaySchedules =
     resolveLessonsForDate(
-      schedule.schedules,
-      today,
+      scheduleData.schedules,
+      now,
       currentWeek,
-      1
+      1,
+      {
+        referenceDate: now
+      }
     );
 
   const nextLesson =
     getNextLesson(
-      todaySchedules
+      scheduleData.schedules,
+      now,
+      null,
+      1,
+      currentWeek,
+      now
     );
-
-  if (!debug.source) {
-    debug.source =
-      cached ? "redis" : "bsuir";
-  }
-
-  debug.scheduleDays =
-    Object.keys(
-      schedule.schedules
-    ).length;
 
   return res.status(200).json({
     success: true,
     cached,
-    fallback,
+    fallback: false,
     stale,
-    debug,
+    debug: {
+      ...debug,
+      source: cached
+        ? "redis"
+        : "bsuir"
+    },
     data: {
-      studentGroup: group,
-
+      studentGroup,
       schedules:
-        schedule.schedules,
-
+        scheduleData.schedules,
       todaySchedules,
-
       exams:
-        Array.isArray(schedule.exams)
-          ? schedule.exams
+        Array.isArray(scheduleData.exams)
+          ? scheduleData.exams
           : [],
-
       currentWeek,
-
       nextLesson
     }
   });
