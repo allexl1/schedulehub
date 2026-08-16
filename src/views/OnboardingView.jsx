@@ -10,12 +10,25 @@ export default function OnboardingView({ onComplete }) {
   const popularGroups = ['373902', '361401', '473904', '373901', '373905'];
 
   const handleNext = () => {
-    if (step < 3) {
-      setStep(step + 1);
-    } else {
-      onComplete(selectedGroup, selectedSubgroup);
+  if (step === 1) {
+    if (!selectedGroup.trim()) {
+      return;
     }
-  };
+
+    setStep(2);
+    return;
+  }
+
+  if (step === 2) {
+    setStep(3);
+    return;
+  }
+
+  onComplete(
+    selectedGroup.trim(),
+    selectedSubgroup
+  );
+};
 
   return (
     <div className="min-h-[80vh] flex flex-col justify-between py-6">
