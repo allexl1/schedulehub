@@ -16,6 +16,9 @@ import {
   resolveLessonsForDate
 } from '../utils/scheduleResolver';
 
+import GroupSelectorSheet from '../components/schedule/GroupSelectorSheet';
+import GroupBrowser from '../components/schedule/GroupBrowser';
+
 const DAYS = [
   { key: 1, label: 'Mon' },
   { key: 2, label: 'Tue' },
@@ -123,9 +126,11 @@ function hasLessons(schedules) {
 
 export default function ScheduleView({
   scheduleData,
+  group,
   subgroup = 1,
   loading = false,
-  onLessonClick
+  onLessonClick,
+  onGroupChange
 }) {
   const [now, setNow] = useState(
     () => new Date()
@@ -135,6 +140,16 @@ export default function ScheduleView({
     selectedDate,
     setSelectedDate
   ] = useState(initialDate);
+
+const [
+  isGroupSelectorOpen,
+  setIsGroupSelectorOpen
+] = useState(false);
+
+const [
+  isGroupBrowserOpen,
+  setIsGroupBrowserOpen
+] = useState(false);
 
   const [
     isModalOpen,
@@ -487,25 +502,37 @@ export default function ScheduleView({
   return (
     <div className="space-y-5">
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
-            Schedule
-          </h2>
+   <div className="flex items-center justify-between gap-3">
+  <div className="min-w-0">
+    <h2 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
+      Schedule
+    </h2>
 
-          <p className="mt-0.5 text-xs font-medium text-[var(--text-secondary)]">
-            Academic Timetable
-          </p>
-        </div>
+    <button
+      type="button"
+      onClick={() =>
+        setIsGroupSelectorOpen(true)
+      }
+      className="mt-1 flex max-w-full items-center gap-1.5 rounded-lg text-left active:opacity-70"
+    >
+      <span className="truncate text-xs font-bold text-[#2997ff]">
+        {group || 'Select group'}
+      </span>
 
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="rounded-xl bg-[#2997ff]/10 px-3 py-1.5 text-xs font-bold text-[#2997ff] transition-all active:scale-95"
-        >
-          + Add Event
-        </button>
-      </div>
+      <span className="text-[10px] text-[#2997ff]">
+        ▾
+      </span>
+    </button>
+  </div>
+
+  <button
+    type="button"
+    onClick={openCreateModal}
+    className="shrink-0 rounded-xl bg-[#2997ff]/10 px-3 py-1.5 text-xs font-bold text-[#2997ff] transition-all active:scale-95"
+  >
+    + Add Event
+  </button>
+</div>
 
       <div className="flex items-center justify-between gap-2">
         <button
@@ -692,6 +719,35 @@ export default function ScheduleView({
           editingEvent
         }
       />
+      {isGroupSelectorOpen && (
+  <GroupSelectorSheet
+    currentGroup={group}
+    onSelectGroup={selectedGroup => {
+      onGroupChange(selectedGroup);
+      setIsGroupSelectorOpen(false);
+    }}
+    onOpenBrowser={() => {
+      setIsGroupSelectorOpen(false);
+      setIsGroupBrowserOpen(true);
+    }}
+    onClose={() =>
+      setIsGroupSelectorOpen(false)
+    }
+  />
+)}
+
+{isGroupBrowserOpen && (
+  <GroupBrowser
+    currentGroup={group}
+    onSelectGroup={selectedGroup => {
+      onGroupChange(selectedGroup);
+      setIsGroupBrowserOpen(false);
+    }}
+    onClose={() =>
+      setIsGroupBrowserOpen(false)
+    }
+  />
+)}
     </div>
   );
 }
