@@ -4,7 +4,7 @@ import React, {
   useRef,
   useState
 } from 'react';
-
+import LessonDetailsSheet from '../components/schedule/LessonDetailsSheet';
 import ScheduleToolbar from '../components/schedule/ScheduleToolbar';
 import PersonalEventModal from '../components/schedule/PersonalEventModal';
 import ScheduleLessonCard from '../components/schedule/ScheduleLessonCard';
@@ -193,6 +193,11 @@ export default function ScheduleView({
     selectedDate,
     setSelectedDate
   ] = useState(initialDate);
+
+const [
+  selectedLesson,
+  setSelectedLesson
+] = useState(null);
 
   const [
     activeAction,
@@ -981,9 +986,10 @@ export default function ScheduleView({
                     index={
                       index
                     }
-                    onLessonClick={
-                      onLessonClick
-                    }
+                    onLessonClick={lesson => {
+  setSelectedLesson(lesson);
+  onLessonClick?.(lesson);
+}
                     onEditPersonalEvent={
                       openEditModal
                     }
@@ -1022,6 +1028,25 @@ export default function ScheduleView({
           editingEvent
         }
       />
+
+<LessonDetailsSheet
+  lesson={selectedLesson}
+  onClose={() =>
+    setSelectedLesson(null)
+  }
+  onTeacherClick={teacher => {
+    console.log(
+      'Teacher selected:',
+      teacher
+    );
+  }}
+  onTeacherPhotoClick={teacher => {
+    console.log(
+      'Teacher photo selected:',
+      teacher
+    );
+  }}
+/>
 
       {isGroupSelectorOpen && (
         <GroupSelectorSheet
