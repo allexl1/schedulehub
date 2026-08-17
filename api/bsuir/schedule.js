@@ -1,21 +1,27 @@
 import {
   resolveLessonsForDate,
-  getNextLesson
-} from "../../src/utils/scheduleResolver.js";
+  getNextLesson,
+  getAcademicWeekForDate
+} from '../../src/utils/scheduleResolver.js';
 
 import {
   validateStudentGroup
-} from "./groups.js";
+} from './groups.js';
 
-const API = "https://iis.bsuir.by/api/v1";
+const API =
+  'https://iis.bsuir.by/api/v1';
+
 const TIMEOUT = 10000;
-const CACHE_TTL = 86400;
+
+const CACHE_TTL =
+  86400;
 
 function redisConfig() {
   return {
     url:
       process.env.UPSTASH_REDIS_REST_URL ||
       process.env.KV_REST_API_URL,
+
     token:
       process.env.UPSTASH_REDIS_REST_TOKEN ||
       process.env.KV_REST_API_TOKEN
@@ -23,60 +29,79 @@ function redisConfig() {
 }
 
 async function redisGet(key) {
-  const { url, token } = redisConfig();
+  const {
+    url,
+    token
+  } = redisConfig();
 
   if (!url || !token) {
     return null;
   }
 
   try {
-    const response = await fetch(
-      `${url}/get/${encodeURIComponent(key)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
+    const response =
+      await fetch(
+        `${url}/get/${encodeURIComponent(
+          key
+        )}`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
         }
-      }
-    );
+      );
 
     if (!response.ok) {
       return null;
     }
 
-    const result = await response.json();
+    const result =
+      await response.json();
 
     if (!result.result) {
       return null;
     }
 
-    return JSON.parse(result.result);
+    return JSON.parse(
+      result.result
+    );
   } catch {
     return null;
   }
 }
 
-async function redisSet(key, value) {
-  const { url, token } = redisConfig();
+async function redisSet(
+  key,
+  value
+) {
+  const {
+    url,
+    token
+  } = redisConfig();
 
   if (!url || !token) {
     return false;
   }
 
   try {
-    const encoded = encodeURIComponent(
-      JSON.stringify(value)
-    );
+    const encoded =
+      encodeURIComponent(
+        JSON.stringify(value)
+      );
 
-    const response = await fetch(
-      `${url}/set/${encodeURIComponent(
-        key
-      )}/${encoded}?ex=${CACHE_TTL}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
+    const response =
+      await fetch(
+        `${url}/set/${encodeURIComponent(
+          key
+        )}/${encoded}?ex=${CACHE_TTL}`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
         }
-      }
-    );
+      );
 
     return response.ok;
   } catch {
@@ -84,28 +109,36 @@ async function redisSet(key, value) {
   }
 }
 
-async function fetchJson(url) {
+async function fetchJson(
+  url
+) {
   const controller =
     new AbortController();
 
-  const timer = setTimeout(
-    () => controller.abort(),
-    TIMEOUT
-  );
+  const timer =
+    setTimeout(
+      () =>
+        controller.abort(),
+      TIMEOUT
+    );
 
   try {
-    const response = await fetch(
-      url,
-      {
-        signal: controller.signal,
-        headers: {
-          Accept:
-            "application/json, text/plain, */*",
-          "User-Agent":
-            "ScheduleHub/1.0"
+    const response =
+      await fetch(
+        url,
+        {
+          signal:
+            controller.signal,
+
+          headers: {
+            Accept:
+              'application/json, text/plain, */*',
+
+            'User-Agent':
+              'ScheduleHub/1.0'
+          }
         }
-      }
-    );
+      );
 
     if (!response.ok) {
       throw new Error(
@@ -115,14 +148,19 @@ async function fetchJson(url) {
 
     return await response.json();
   } finally {
-    clearTimeout(timer);
+    clearTimeout(
+      timer
+    );
   }
 }
 
-function hasSchedules(schedules) {
+function hasSchedules(
+  schedules
+) {
   if (
     !schedules ||
-    typeof schedules !== "object"
+    typeof schedules !==
+      'object'
   ) {
     return false;
   }
@@ -136,12 +174,20 @@ function hasSchedules(schedules) {
   );
 }
 
+/*
+ * Exact same priority as Swift:
+ *
+ * schedules
+ * → nextSchedules
+ * → previousSchedules
+ */
 function getActualSchedules(
   scheduleData
 ) {
   if (
     !scheduleData ||
-    typeof scheduleData !== "object"
+    typeof scheduleData !==
+      'object'
   ) {
     return {};
   }
@@ -173,47 +219,63 @@ function getActualSchedules(
   return {};
 }
 
-function validWeek(value) {
-  const week = Number(value);
+function validWeek(
+  value
+) {
+  const week =
+    Number(value);
 
-  return Number.isInteger(week) &&
+  return (
+    Number.isInteger(
+      week
+    ) &&
     week >= 1 &&
     week <= 4
+  )
     ? week
     : null;
 }
 
-function extractCurrentWeek(value) {
+function extractCurrentWeek(
+  value
+) {
   if (
     value &&
-    typeof value === "object"
+    typeof value ===
+      'object'
   ) {
     return validWeek(
       value.currentWeek ??
-      value.week ??
-      value.weekNumber ??
-      value.value
+        value.week ??
+        value.weekNumber ??
+        value.value
     );
   }
 
-  return validWeek(value);
+  return validWeek(
+    value
+  );
 }
 
-function normalizeSubgroup(value) {
+function normalizeSubgroup(
+  value
+) {
   const raw =
-    String(value ?? "all")
+    String(
+      value ?? 'all'
+    )
       .trim()
       .toLowerCase();
 
-  if (raw === "1") {
+  if (raw === '1') {
     return 1;
   }
 
-  if (raw === "2") {
+  if (raw === '2') {
     return 2;
   }
 
-  return "all";
+  return 'all';
 }
 
 function fallbackData(
@@ -222,12 +284,38 @@ function fallbackData(
 ) {
   return {
     studentGroup,
+
     schedules: {},
-    todaySchedules: [],
-    exams: [],
+
+    previousSchedules:
+      {},
+
+    nextSchedules:
+      {},
+
+    startDate:
+      null,
+
+    endDate:
+      null,
+
+    startExamsDate:
+      null,
+
+    endExamsDate:
+      null,
+
+    todaySchedules:
+      [],
+
+    exams:
+      [],
+
     currentWeek:
       currentWeek || 1,
-    nextLesson: null
+
+    nextLesson:
+      null
   };
 }
 
@@ -236,14 +324,15 @@ export default async function handler(
   res
 ) {
   res.setHeader(
-    "Cache-Control",
-    "s-maxage=3600, stale-while-revalidate=86400"
+    'Cache-Control',
+    's-maxage=3600, stale-while-revalidate=86400'
   );
 
   const requestedGroup =
-    typeof req.query.group === "string"
+    typeof req.query.group ===
+    'string'
       ? req.query.group.trim()
-      : "";
+      : '';
 
   if (!requestedGroup) {
     return res.status(400).json({
@@ -251,10 +340,12 @@ export default async function handler(
       cached: false,
       fallback: false,
       stale: false,
+
       debug: {
         error:
-          "Missing group parameter"
+          'Missing group parameter'
       },
+
       data: null
     });
   }
@@ -272,20 +363,27 @@ export default async function handler(
   if (!groupResult.valid) {
     return res.status(400).json({
       success: false,
+
       cached:
         groupResult.cached,
+
       fallback: false,
+
       stale:
         groupResult.stale,
+
       debug: {
         error:
           groupResult.reason,
+
         requestedGroup,
+
         groupSource:
           groupResult.cached
-            ? "redis"
-            : "bsuir"
+            ? 'redis'
+            : 'bsuir'
       },
+
       data: null
     });
   }
@@ -293,33 +391,51 @@ export default async function handler(
   const studentGroup =
     String(
       groupResult.group?.name ||
-      requestedGroup
+        requestedGroup
     ).trim();
 
   const scheduleKey =
     `bsuir:schedule:${studentGroup}`;
 
   const weekKey =
-    "bsuir:current-week";
+    'bsuir:current-week';
 
   const debug = {
-    group: studentGroup,
+    group:
+      studentGroup,
+
     requestedGroup,
+
     subgroup,
-    scheduleSource: null,
-    weekSource: null,
+
+    scheduleSource:
+      null,
+
+    weekSource:
+      null,
+
     groupSource:
       groupResult.cached
-        ? "redis"
-        : "bsuir"
+        ? 'redis'
+        : 'bsuir'
   };
 
-  let scheduleData = null;
-  let currentWeek = null;
+  let scheduleData =
+    null;
 
-  let scheduleCached = false;
-  let weekCached = false;
+  let currentWeek =
+    null;
 
+  let scheduleCached =
+    false;
+
+  let weekCached =
+    false;
+
+  /*
+   * Fetch schedule and current-week
+   * exactly as Swift does.
+   */
   const results =
     await Promise.allSettled([
       fetchJson(
@@ -327,6 +443,7 @@ export default async function handler(
           studentGroup
         )}`
       ),
+
       fetchJson(
         `${API}/schedule/current-week`
       )
@@ -340,11 +457,14 @@ export default async function handler(
 
   if (
     scheduleResult.status ===
-      "fulfilled"
+    'fulfilled'
   ) {
+    const raw =
+      scheduleResult.value;
+
     const actualSchedules =
       getActualSchedules(
-        scheduleResult.value
+        raw
       );
 
     if (
@@ -352,40 +472,62 @@ export default async function handler(
         actualSchedules
       )
     ) {
+      /*
+       * IMPORTANT:
+       * Preserve ALL schedule metadata.
+       *
+       * Swift's StudentGroup.Schedule
+       * uses these fields.
+       */
       scheduleData = {
-        ...scheduleResult.value,
+        ...raw,
+
         schedules:
           actualSchedules
       };
 
-      debug.scheduleSource =
-        scheduleResult.value
-          .schedules &&
+      if (
+        raw.schedules &&
         hasSchedules(
-          scheduleResult.value
-            .schedules
+          raw.schedules
         )
-          ? "bsuir"
-          : scheduleResult.value
-                .nextSchedules &&
-            hasSchedules(
-              scheduleResult.value
-                .nextSchedules
-            )
-            ? "bsuir-next"
-            : "bsuir-previous";
+      ) {
+        debug.scheduleSource =
+          'bsuir';
+      } else if (
+        raw.nextSchedules &&
+        hasSchedules(
+          raw.nextSchedules
+        )
+      ) {
+        debug.scheduleSource =
+          'bsuir-next';
+      } else {
+        debug.scheduleSource =
+          'bsuir-previous';
+      }
     } else {
+      /*
+       * Keep the metadata even when
+       * the schedule itself is empty.
+       */
+      scheduleData = {
+        ...raw,
+        schedules:
+          {}
+      };
+
       debug.scheduleSource =
-        "bsuir-empty";
+        'bsuir-empty';
     }
   } else {
     debug.scheduleSource =
-      "bsuir-error";
+      'bsuir-error';
   }
 
   if (
     weekResult.status ===
-    "fulfilled"
+    'fulfilled'
   ) {
     currentWeek =
       extractCurrentWeek(
@@ -395,55 +537,76 @@ export default async function handler(
 
   if (currentWeek) {
     debug.weekSource =
-      "bsuir";
+      'bsuir';
   } else {
     debug.weekSource =
       weekResult.status ===
-      "rejected"
-        ? "bsuir-error"
-        : "bsuir-invalid";
+      'rejected'
+        ? 'bsuir-error'
+        : 'bsuir-invalid';
   }
 
+  /*
+   * Schedule cache fallback.
+   */
   if (!scheduleData) {
     const cachedSchedule =
       await redisGet(
         scheduleKey
       );
 
-    const actualCachedSchedules =
-      getActualSchedules(
-        cachedSchedule
-      );
-
     if (
-      hasSchedules(
-        actualCachedSchedules
-      )
+      cachedSchedule &&
+      typeof cachedSchedule ===
+        'object'
     ) {
-      scheduleData = {
-        ...cachedSchedule,
-        schedules:
-          actualCachedSchedules
-      };
+      const actualCachedSchedules =
+        getActualSchedules(
+          cachedSchedule
+        );
 
-      scheduleCached = true;
-
-      debug.scheduleSource =
-        cachedSchedule?.schedules &&
+      if (
         hasSchedules(
-          cachedSchedule.schedules
+          actualCachedSchedules
         )
-          ? "redis"
-          : cachedSchedule?.nextSchedules &&
-            hasSchedules(
-              cachedSchedule
-                .nextSchedules
-            )
-          ? "redis-next"
-          : "redis-previous";
+      ) {
+        scheduleData = {
+          ...cachedSchedule,
+
+          schedules:
+            actualCachedSchedules
+        };
+
+        scheduleCached =
+          true;
+
+        if (
+          cachedSchedule.schedules &&
+          hasSchedules(
+            cachedSchedule.schedules
+          )
+        ) {
+          debug.scheduleSource =
+            'redis';
+        } else if (
+          cachedSchedule.nextSchedules &&
+          hasSchedules(
+            cachedSchedule.nextSchedules
+          )
+        ) {
+          debug.scheduleSource =
+            'redis-next';
+        } else {
+          debug.scheduleSource =
+            'redis-previous';
+        }
+      }
     }
   }
 
+  /*
+   * Week cache fallback.
+   */
   if (!currentWeek) {
     const cachedWeek =
       await redisGet(
@@ -456,10 +619,11 @@ export default async function handler(
       );
 
     if (currentWeek) {
-      weekCached = true;
+      weekCached =
+        true;
 
       debug.weekSource =
-        "redis";
+        'redis';
     }
   }
 
@@ -468,34 +632,61 @@ export default async function handler(
       scheduleData
     );
 
+  /*
+   * We can calculate the current
+   * academic week locally using the
+   * same calendar algorithm as Swift.
+   *
+   * The BSUIR current-week endpoint
+   * remains useful as API metadata,
+   * but it is NOT used to determine
+   * which week a particular date
+   * belongs to.
+   */
+  const now =
+    new Date();
+
+  const calculatedCurrentWeek =
+    getAcademicWeekForDate(
+      now,
+      now
+    );
+
   if (
     !scheduleData ||
     !hasSchedules(
       actualSchedules
-    ) ||
-    !currentWeek
+    )
   ) {
     return res.status(200).json({
       success: true,
+
       cached:
         scheduleCached ||
         weekCached,
+
       fallback: true,
+
       stale:
         scheduleCached ||
         weekCached,
+
       debug: {
         ...debug,
+
         source:
           scheduleCached ||
           weekCached
-            ? "redis"
-            : "fallback"
+            ? 'redis'
+            : 'fallback'
       },
-      data: fallbackData(
-        studentGroup,
-        currentWeek
-      )
+
+      data:
+        fallbackData(
+          studentGroup,
+          calculatedCurrentWeek ||
+            currentWeek
+        )
     });
   }
 
@@ -526,53 +717,141 @@ export default async function handler(
     scheduleCached ||
     weekCached;
 
-  const now =
-    new Date();
+  /*
+   * Preserve the actual BSUIR
+   * schedule boundaries.
+   */
+  const startDate =
+    scheduleData.startDate ||
+    null;
+
+  const endDate =
+    scheduleData.endDate ||
+    null;
+
+  const startExamsDate =
+    scheduleData.startExamsDate ||
+    null;
+
+  const endExamsDate =
+    scheduleData.endExamsDate ||
+    null;
 
   const todaySchedules =
     resolveLessonsForDate(
       actualSchedules,
+
       now,
-      currentWeek,
+
+      calculatedCurrentWeek ||
+        currentWeek ||
+        1,
+
       subgroup,
+
       {
-        referenceDate: now
+        referenceDate:
+          now,
+
+        startDate,
+
+        endDate
       }
     );
 
   const nextLesson =
     getNextLesson(
       actualSchedules,
+
       now,
-      null,
+
+      endDate,
+
       subgroup,
-      currentWeek,
-      now
+
+      calculatedCurrentWeek ||
+        currentWeek ||
+        1,
+
+      now,
+
+      {
+        startDate,
+        endDate
+      }
     );
 
   return res.status(200).json({
     success: true,
+
     cached,
+
     fallback: false,
+
     stale,
+
     debug: {
       ...debug,
-      source: cached
-        ? "redis"
-        : "bsuir"
+
+      source:
+        cached
+          ? 'redis'
+          : 'bsuir'
     },
+
     data: {
       studentGroup,
+
+      /*
+       * Current/actual schedule.
+       */
       schedules:
         actualSchedules,
+
+      /*
+       * Preserve both alternate
+       * schedules because the frontend
+       * will eventually need them.
+       */
+      previousSchedules:
+        scheduleData.previousSchedules ||
+        {},
+
+      nextSchedules:
+        scheduleData.nextSchedules ||
+        {},
+
+      /*
+       * THESE WERE MISSING BEFORE.
+       */
+      startDate,
+
+      endDate,
+
+      startExamsDate,
+
+      endExamsDate,
+
       todaySchedules,
+
       exams:
         Array.isArray(
           scheduleData.exams
         )
           ? scheduleData.exams
           : [],
-      currentWeek,
+
+      /*
+       * This is still useful for
+       * displaying the current week,
+       * but date resolution does not
+       * depend on it anymore.
+       */
+      currentWeek:
+        calculatedCurrentWeek ||
+        currentWeek ||
+        1,
+
       nextLesson
     }
   });
