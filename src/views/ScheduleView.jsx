@@ -964,32 +964,12 @@ export default function ScheduleView({
         }
       />
 
-      <LessonDetailsSheet
-        lesson={
-          selectedLesson
-        }
-        onClose={() =>
-          setSelectedLesson(
-            null
-          )
-        }
-        onTeacherClick={
-          teacher => {
-            console.log(
-              'Teacher selected:',
-              teacher
-            );
-          }
-        }
-        onTeacherPhotoClick={
-          teacher => {
-            console.log(
-              'Teacher photo selected:',
-              teacher
-            );
-          }
-        }
-      />
+<LessonDetailsSheet
+  lesson={selectedLesson}
+  onClose={() =>
+    setSelectedLesson(null)
+  }
+/>
 
       {isGroupSelectorOpen && (
         <GroupSelectorSheet
