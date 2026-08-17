@@ -989,7 +989,7 @@ const [
                     onLessonClick={lesson => {
   setSelectedLesson(lesson);
   onLessonClick?.(lesson);
-}
+}}
                     onEditPersonalEvent={
                       openEditModal
                     }
