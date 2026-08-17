@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState
+} from 'react';
+
 import PersonalEventModal from '../components/schedule/PersonalEventModal';
 import ScheduleLessonCard from '../components/schedule/ScheduleLessonCard';
 
@@ -7,7 +12,9 @@ import {
   parseStartTimeInMinutes
 } from '../utils/time';
 
-import { resolveLessonsForDate } from '../utils/scheduleResolver';
+import {
+  resolveLessonsForDate
+} from '../utils/scheduleResolver';
 
 const DAYS = [
   { key: 1, label: 'Mon' },
@@ -27,16 +34,29 @@ function addDays(date, amount) {
 function startOfWeek(date) {
   const result = new Date(date);
   const day = result.getDay();
-  const offset = day === 0 ? -6 : 1 - day;
+  const offset =
+    day === 0
+      ? -6
+      : 1 - day;
 
-  result.setDate(result.getDate() + offset);
-  result.setHours(0, 0, 0, 0);
+  result.setDate(
+    result.getDate() + offset
+  );
+
+  result.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
   return result;
 }
 
 function sameDate(a, b) {
-  if (!a || !b) return false;
+  if (!a || !b) {
+    return false;
+  }
 
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -46,18 +66,24 @@ function sameDate(a, b) {
 }
 
 function formatDate(date) {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric'
-  });
+  return date.toLocaleDateString(
+    'en-US',
+    {
+      month: 'short',
+      day: 'numeric'
+    }
+  );
 }
 
 function formatFullDate(date) {
-  return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric'
-  });
+  return date.toLocaleDateString(
+    'en-US',
+    {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    }
+  );
 }
 
 function personalDay(date) {
@@ -86,7 +112,9 @@ function getScheduleData(value) {
 }
 
 function hasLessons(schedules) {
-  return Object.values(schedules || {}).some(
+  return Object.values(
+    schedules || {}
+  ).some(
     value =>
       Array.isArray(value) &&
       value.length > 0
@@ -99,55 +127,82 @@ export default function ScheduleView({
   loading = false,
   onLessonClick
 }) {
-  const [now, setNow] = useState(() => new Date());
-  const [selectedDate, setSelectedDate] =
-    useState(initialDate);
+  const [now, setNow] = useState(
+    () => new Date()
+  );
 
-  const [isModalOpen, setIsModalOpen] =
-    useState(false);
+  const [
+    selectedDate,
+    setSelectedDate
+  ] = useState(initialDate);
 
-  const [editingEvent, setEditingEvent] =
-    useState(null);
+  const [
+    isModalOpen,
+    setIsModalOpen
+  ] = useState(false);
 
-  const [personalEvents, setPersonalEvents] =
-    useState(() => {
-      try {
-        const saved =
-          localStorage.getItem(
-            'sh_personal_events'
-          );
+  const [
+    editingEvent,
+    setEditingEvent
+  ] = useState(null);
 
-        return saved
-          ? JSON.parse(saved)
-          : [];
-      } catch {
+  const [
+    personalEvents,
+    setPersonalEvents
+  ] = useState(() => {
+    try {
+      const saved =
+        localStorage.getItem(
+          'sh_personal_events'
+        );
+
+      if (!saved) {
         return [];
       }
-    });
+
+      const parsed =
+        JSON.parse(saved);
+
+      return Array.isArray(parsed)
+        ? parsed
+        : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     const timer = setInterval(
-      () => setNow(new Date()),
+      () => {
+        setNow(new Date());
+      },
       5000
     );
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+    };
   }, []);
 
   const data = useMemo(
-    () => getScheduleData(scheduleData),
+    () =>
+      getScheduleData(
+        scheduleData
+      ),
     [scheduleData]
   );
 
   const schedules =
     data?.schedules &&
-    typeof data.schedules === 'object'
+    typeof data.schedules ===
+      'object'
       ? data.schedules
       : {};
 
-  const exams = Array.isArray(data?.exams)
-    ? data.exams
-    : [];
+  const exams =
+    Array.isArray(data?.exams)
+      ? data.exams
+      : [];
 
   const currentWeek =
     Number(data?.currentWeek) >= 1 &&
@@ -159,7 +214,10 @@ export default function ScheduleView({
     hasLessons(schedules);
 
   const weekStart = useMemo(
-    () => startOfWeek(selectedDate),
+    () =>
+      startOfWeek(
+        selectedDate
+      ),
     [selectedDate]
   );
 
@@ -196,12 +254,19 @@ export default function ScheduleView({
   );
 
   const events = useMemo(() => {
-    const day = personalDay(selectedDate);
+    const day =
+      personalDay(
+        selectedDate
+      );
 
     return personalEvents.filter(
-      event => event.day === day
+      event =>
+        event?.day === day
     );
-  }, [personalEvents, selectedDate]);
+  }, [
+    personalEvents,
+    selectedDate
+  ]);
 
   const schedule = useMemo(() => {
     const combined = [
@@ -209,12 +274,19 @@ export default function ScheduleView({
       ...events
     ].sort(
       (a, b) =>
-        parseStartTimeInMinutes(a.time) -
-        parseStartTimeInMinutes(b.time)
+        parseStartTimeInMinutes(
+          a.time
+        ) -
+        parseStartTimeInMinutes(
+          b.time
+        )
     );
 
-    const today =
-      sameDate(selectedDate, now);
+    const isToday =
+      sameDate(
+        selectedDate,
+        now
+      );
 
     let nextFound = false;
 
@@ -227,12 +299,16 @@ export default function ScheduleView({
       }
 
       const rawStatus =
-        getClassStatus(item.time, now);
+        getClassStatus(
+          item.time,
+          now
+        );
 
-      let status = rawStatus;
+      let status =
+        rawStatus;
 
       if (
-        today &&
+        isToday &&
         rawStatus === 'upcoming' &&
         !nextFound
       ) {
@@ -240,11 +316,15 @@ export default function ScheduleView({
         nextFound = true;
       }
 
-      if (rawStatus === 'current') {
+      if (
+        rawStatus === 'current'
+      ) {
         status = 'in_progress';
       }
 
-      if (rawStatus === 'finished') {
+      if (
+        rawStatus === 'finished'
+      ) {
         status = 'past';
       }
 
@@ -260,50 +340,77 @@ export default function ScheduleView({
     now
   ]);
 
-  const selectedExamCount = useMemo(
-    () =>
-      exams.filter(exam => {
-        if (!exam?.date) return false;
+  const selectedExamCount =
+    useMemo(
+      () =>
+        exams.filter(exam => {
+          if (!exam?.date) {
+            return false;
+          }
 
-        const date = new Date(exam.date);
+          const date =
+            new Date(
+              exam.date
+            );
 
-        return (
-          !Number.isNaN(date.getTime()) &&
-          sameDate(date, selectedDate)
-        );
-      }).length,
-    [exams, selectedDate]
-  );
+          return (
+            !Number.isNaN(
+              date.getTime()
+            ) &&
+            sameDate(
+              date,
+              selectedDate
+            )
+          );
+        }).length,
+      [
+        exams,
+        selectedDate
+      ]
+    );
 
   const selectDate = date => {
-    setSelectedDate(new Date(date));
+    setSelectedDate(
+      new Date(date)
+    );
   };
 
   const goToday = () => {
-    setSelectedDate(initialDate());
-  };
-
-  const goPreviousWeek = () => {
     setSelectedDate(
-      addDays(selectedDate, -7)
+      initialDate()
     );
   };
+
+  const goPreviousWeek =
+    () => {
+      setSelectedDate(
+        addDays(
+          selectedDate,
+          -7
+        )
+      );
+    };
 
   const goNextWeek = () => {
     setSelectedDate(
-      addDays(selectedDate, 7)
+      addDays(
+        selectedDate,
+        7
+      )
     );
   };
 
-  const openCreateModal = () => {
-    setEditingEvent(null);
-    setIsModalOpen(true);
-  };
+  const openCreateModal =
+    () => {
+      setEditingEvent(null);
+      setIsModalOpen(true);
+    };
 
-  const openEditModal = event => {
-    setEditingEvent(event);
-    setIsModalOpen(true);
-  };
+  const openEditModal =
+    event => {
+      setEditingEvent(event);
+      setIsModalOpen(true);
+    };
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -311,24 +418,34 @@ export default function ScheduleView({
   };
 
   const saveEvent = event => {
-    const exists = personalEvents.some(
-      item => item.id === event.id
-    );
+    const exists =
+      personalEvents.some(
+        item =>
+          item.id === event.id
+      );
 
     const updated = exists
-      ? personalEvents.map(item =>
-          item.id === event.id
-            ? event
-            : item
+      ? personalEvents.map(
+          item =>
+            item.id === event.id
+              ? event
+              : item
         )
-      : [...personalEvents, event];
+      : [
+          ...personalEvents,
+          event
+        ];
 
-    setPersonalEvents(updated);
+    setPersonalEvents(
+      updated
+    );
 
     try {
       localStorage.setItem(
         'sh_personal_events',
-        JSON.stringify(updated)
+        JSON.stringify(
+          updated
+        )
       );
     } catch (error) {
       console.error(
@@ -336,46 +453,55 @@ export default function ScheduleView({
         error
       );
     }
+
+    closeModal();
   };
 
-  const deleteEvent = eventId => {
-    const updated =
-      personalEvents.filter(
-        event => event.id !== eventId
+  const deleteEvent =
+    eventId => {
+      const updated =
+        personalEvents.filter(
+          event =>
+            event.id !== eventId
+        );
+
+      setPersonalEvents(
+        updated
       );
 
-    setPersonalEvents(updated);
-
-    try {
-      localStorage.setItem(
-        'sh_personal_events',
-        JSON.stringify(updated)
-      );
-    } catch (error) {
-      console.error(
-        'Failed to delete personal event:',
-        error
-      );
-    }
-  };
+      try {
+        localStorage.setItem(
+          'sh_personal_events',
+          JSON.stringify(
+            updated
+          )
+        );
+      } catch (error) {
+        console.error(
+          'Failed to delete personal event:',
+          error
+        );
+      }
+    };
 
   return (
     <div className="space-y-5">
 
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
             Schedule
           </h2>
 
-          <p className="text-xs font-medium text-[var(--text-secondary)] mt-0.5">
+          <p className="mt-0.5 text-xs font-medium text-[var(--text-secondary)]">
             Academic Timetable
           </p>
         </div>
 
         <button
+          type="button"
           onClick={openCreateModal}
-          className="text-xs font-bold text-[#2997ff] bg-[#2997ff]/10 px-3 py-1.5 rounded-xl transition-all active:scale-95"
+          className="rounded-xl bg-[#2997ff]/10 px-3 py-1.5 text-xs font-bold text-[#2997ff] transition-all active:scale-95"
         >
           + Add Event
         </button>
@@ -384,8 +510,10 @@ export default function ScheduleView({
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
-          onClick={goPreviousWeek}
-          className="px-3 py-2 rounded-xl bg-[var(--surface-glass)] text-[var(--text-secondary)] text-xs font-bold"
+          onClick={
+            goPreviousWeek
+          }
+          className="rounded-xl bg-[var(--surface-glass)] px-3 py-2 text-xs font-bold text-[var(--text-secondary)]"
         >
           Prev
         </button>
@@ -393,15 +521,17 @@ export default function ScheduleView({
         <button
           type="button"
           onClick={goToday}
-          className="px-3 py-2 rounded-xl bg-[#2997ff]/10 text-[#2997ff] text-xs font-bold"
+          className="rounded-xl bg-[#2997ff]/10 px-3 py-2 text-xs font-bold text-[#2997ff]"
         >
           Today
         </button>
 
         <button
           type="button"
-          onClick={goNextWeek}
-          className="px-3 py-2 rounded-xl bg-[var(--surface-glass)] text-[var(--text-secondary)] text-xs font-bold"
+          onClick={
+            goNextWeek
+          }
+          className="rounded-xl bg-[var(--surface-glass)] px-3 py-2 text-xs font-bold text-[var(--text-secondary)]"
         >
           Next
         </button>
@@ -416,16 +546,21 @@ export default function ScheduleView({
             );
 
           const today =
-            sameDate(day.date, now);
+            sameDate(
+              day.date,
+              now
+            );
 
           return (
             <button
               key={day.key}
               type="button"
               onClick={() =>
-                selectDate(day.date)
+                selectDate(
+                  day.date
+                )
               }
-              className={`flex-1 min-w-[52px] py-2 px-2 rounded-xl text-center transition-all ${
+              className={`min-w-[52px] flex-1 rounded-xl px-2 py-2 text-center transition-all ${
                 selected
                   ? 'bg-[#2997ff] text-white shadow-sm'
                   : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
@@ -435,13 +570,13 @@ export default function ScheduleView({
                 {day.label}
               </span>
 
-              <span className="block text-sm font-extrabold mt-0.5">
+              <span className="mt-0.5 block text-sm font-extrabold">
                 {day.date.getDate()}
               </span>
 
               {today && (
                 <span
-                  className={`block text-[8px] font-medium mt-0.5 ${
+                  className={`mt-0.5 block text-[8px] font-medium ${
                     selected
                       ? 'text-white/80'
                       : 'text-[#2997ff]'
@@ -455,26 +590,37 @@ export default function ScheduleView({
         })}
       </div>
 
-      <div className="flex justify-between items-center px-0.5">
+      <div className="flex items-center justify-between px-0.5">
         <div>
           <p className="text-sm font-bold text-[var(--text-primary)]">
-            {formatFullDate(selectedDate)}
+            {formatFullDate(
+              selectedDate
+            )}
           </p>
 
-          <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
-            Week {currentWeek} -{' '}
-            {formatDate(weekStart)} to{' '}
+          <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+            Week {currentWeek} ·{' '}
             {formatDate(
-              addDays(weekStart, 5)
+              weekStart
+            )}{' '}
+            to{' '}
+            {formatDate(
+              addDays(
+                weekStart,
+                5
+              )
             )}
           </p>
         </div>
 
         <span className="text-[10px] font-medium text-[var(--text-secondary)]">
-          {schedule.length} items
-          {selectedExamCount > 0
-            ? ` - ${selectedExamCount} exam${
-                selectedExamCount > 1
+          {schedule.length}{' '}
+          items
+          {selectedExamCount >
+          0
+            ? ` · ${selectedExamCount} exam${
+                selectedExamCount >
+                1
                   ? 's'
                   : ''
               }`
@@ -482,154 +628,59 @@ export default function ScheduleView({
         </span>
       </div>
 
-      {!loading && !hasScheduleData && (
-        <div className="p-3 rounded-xl bg-[#f59e0b]/10 border border-[#f59e0b]/20 text-xs text-[#f59e0b]">
-          Academic timetable data is not loaded.
-          Please check the selected group or reload
-          the schedule.
-        </div>
-      )}
+      {!loading &&
+        !hasScheduleData && (
+          <div className="rounded-xl border border-[#f59e0b]/20 bg-[#f59e0b]/10 p-3 text-xs text-[#f59e0b]">
+            Academic timetable
+            data is not loaded.
+            Please check the
+            selected group or
+            reload the schedule.
+          </div>
+        )}
 
       {loading ? (
-        <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
+        <div className="rounded-2xl bg-[var(--surface-glass)] p-6 text-center text-xs text-[var(--text-secondary)]">
           Loading timetable...
         </div>
-      ) : schedule.length > 0 ? (
-        <div className="bg-[var(--surface-glass)] rounded-2xl overflow-hidden divide-y divide-[var(--border-glass)]">
- {schedule.map((item, index) => (
-  <ScheduleLessonCard
-    key={item.id || index}
-    item={item}
-    now={now}
-    index={index}
-    onLessonClick={onLessonClick}
-    onEditPersonalEvent={openEditModal}
-    onDeletePersonalEvent={deleteEvent}
-  />
-)}
-                className={`w-full p-4 flex items-center justify-between gap-3 transition-all text-left ${
-                  past
-                    ? 'opacity-35'
-                    : 'opacity-100'
-                } ${
-                  current
-                    ? 'bg-white/10'
-                    : ''
-                }`}
-              >
-                <div className="w-20 shrink-0 font-mono">
-                  <span
-                    className={`block text-xs font-bold ${
-                      current
-                        ? 'text-[#30d158] text-sm'
-                        : next
-                          ? 'text-[#2997ff]'
-                          : 'text-[var(--text-primary)]'
-                    }`}
-                  >
-                    {start}
-                  </span>
-
-                  <span className="block text-[10px] text-[var(--text-secondary)]">
-                    {end}
-                  </span>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h4
-                      className={`text-sm truncate ${
-                        current
-                          ? 'font-bold text-base text-[var(--text-primary)]'
-                          : 'font-semibold text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {item.subject || 'Lesson'}
-                    </h4>
-
-                    {current && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#30d158]/20 text-[#30d158] shrink-0">
-                        NOW
-                      </span>
-                    )}
-
-                    {next && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#2997ff]/15 text-[#2997ff] shrink-0">
-                        NEXT
-                      </span>
-                    )}
-
-                    {item.isPersonal && (
-                      <span className="text-[9px] font-medium tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-[var(--text-secondary)] border border-white/10 shrink-0">
-                        Personal
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-[var(--text-secondary)] truncate">
-                    {item.isPersonal ? (
-                      <span className="italic">
-                        Personal Activity
-                      </span>
-                    ) : (
-                      <>
-                        Room {item.room || '-'}{' '}
-                        • {item.teacher || '-'}
-                      </>
-                    )}
-                  </p>
-
-                  {current &&
-                    minutesLeft !== null && (
-                      <p className="text-[11px] font-bold text-[#30d158] mt-1">
-                        Ends in {minutesLeft} min
-                      </p>
-                    )}
-                </div>
-
-                <div className="text-right shrink-0 flex items-center gap-1.5">
-                  <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                    {item.type || 'Lecture'}
-                  </span>
-
-                  {item.isPersonal && (
-                    <div className="flex items-center gap-1 ml-1">
-                      <button
-                        type="button"
-                        onClick={event => {
-                          event.stopPropagation();
-                          openEditModal(item);
-                        }}
-                        className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#2997ff] hover:bg-white/10 transition-colors"
-                        title="Edit event"
-                        aria-label="Edit personal event"
-                      >
-                        ✎
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={event => {
-                          event.stopPropagation();
-                          deleteEvent(item.id);
-                        }}
-                        className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#ff3b30] hover:bg-white/10 transition-colors"
-                        title="Delete event"
-                        aria-label="Delete personal event"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      ) : schedule.length >
+        0 ? (
+        <div className="overflow-hidden rounded-2xl bg-[var(--surface-glass)] divide-y divide-[var(--border-glass)]">
+          {schedule.map(
+            (
+              item,
+              index
+            ) => (
+              <ScheduleLessonCard
+                key={
+                  item.id ||
+                  index
+                }
+                item={item}
+                now={now}
+                index={index}
+                onLessonClick={
+                  onLessonClick
+                }
+                onEditPersonalEvent={
+                  openEditModal
+                }
+                onDeletePersonalEvent={
+                  deleteEvent
+                }
+              />
+            )
+          )}
         </div>
       ) : (
-        <div className="p-6 rounded-2xl bg-[var(--surface-glass)] text-center text-xs text-[var(--text-secondary)]">
-          No classes or events scheduled for{' '}
-          {formatFullDate(selectedDate)}.
+        <div className="rounded-2xl bg-[var(--surface-glass)] p-6 text-center text-xs text-[var(--text-secondary)]">
+          No classes or
+          events scheduled
+          for{' '}
+          {formatFullDate(
+            selectedDate
+          )}
+          .
         </div>
       )}
 
@@ -637,7 +688,9 @@ export default function ScheduleView({
         isOpen={isModalOpen}
         onClose={closeModal}
         onSaveEvent={saveEvent}
-        initialEvent={editingEvent}
+        initialEvent={
+          editingEvent
+        }
       />
     </div>
   );
