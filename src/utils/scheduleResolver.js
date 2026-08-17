@@ -669,70 +669,84 @@ export function normalizeLesson(
     ].join('-');
 
   return {
-    ...lesson,
+  ...lesson,
 
-    id,
+  id,
 
+  subject,
+
+  subjectFullName:
+    lesson.subjectFullName ||
     subject,
 
-    subjectFullName:
-      lesson.subjectFullName ||
-      subject,
+  type:
+    lesson.lessonTypeAbbrev ||
+    lesson.lessonType ||
+    '',
 
-    type:
-      lesson.lessonTypeAbbrev ||
-      lesson.lessonType ||
-      '',
+  time:
+    start && end
+      ? `${start}-${end}`
+      : start,
 
-    time:
-      start && end
-        ? `${start}-${end}`
-        : start,
+  startLessonTime:
+    start,
 
-    startLessonTime:
-      start,
+  endLessonTime:
+    end,
 
-    endLessonTime:
-      end,
+  room:
+    getRoom(
+      lesson.auditories
+    ),
 
-    room:
-      getRoom(
-        lesson.auditories
-      ),
+  teacher:
+    getTeacher(
+      lesson.employees
+    ),
 
-    teacher:
-      getTeacher(
-        lesson.employees
-      ),
+  employees:
+    Array.isArray(
+      lesson.employees
+    )
+      ? lesson.employees
+      : [],
 
-    weekNumber:
-      normalizeWeeks(
-        lesson.weekNumber
-      ),
+  auditories:
+    Array.isArray(
+      lesson.auditories
+    )
+      ? lesson.auditories
+      : [],
 
-    numSubgroup:
-      subgroup,
+  weekNumber:
+    normalizeWeeks(
+      lesson.weekNumber
+    ),
 
-    date:
-      dateKey ||
-      undefined,
+  numSubgroup:
+    subgroup,
 
-    startDateTime:
-      date && start
-        ? makeDateTime(
-            date,
-            start
-          )
-        : undefined,
+  date:
+    dateKey ||
+    undefined,
 
-    endDateTime:
-      date && end
-        ? makeDateTime(
-            date,
-            end
-          )
-        : undefined
-  };
+  startDateTime:
+    date && start
+      ? makeDateTime(
+          date,
+          start
+        )
+      : undefined,
+
+  endDateTime:
+    date && end
+      ? makeDateTime(
+          date,
+          end
+        )
+      : undefined
+};
 }
 
 export function resolveLessonsForDate(
