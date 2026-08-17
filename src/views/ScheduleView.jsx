@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PersonalEventModal from '../components/schedule/PersonalEventModal';
+import ScheduleLessonCard from '../components/schedule/ScheduleLessonCard';
 
 import {
   getClassStatus,
