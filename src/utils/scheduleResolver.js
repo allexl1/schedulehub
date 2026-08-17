@@ -128,6 +128,65 @@ function normalizeSubgroup(value) {
   return 'all';
 }
 
+function normalizeEmployee(employee) {
+  if (!employee || typeof employee !== 'object') {
+    return null;
+  }
+
+  const id =
+    employee.id ??
+    employee.employeeId ??
+    employee.urlId ??
+    null;
+
+  const fio =
+    employee.fio ||
+    [
+      employee.lastName,
+      employee.firstName,
+      employee.middleName
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+  if (!fio && !id) {
+    return null;
+  }
+
+  return {
+    id,
+    urlId:
+      employee.urlId ||
+      null,
+    firstName:
+      employee.firstName ||
+      '',
+    middleName:
+      employee.middleName ||
+      '',
+    lastName:
+      employee.lastName ||
+      '',
+    fio,
+    rank:
+      employee.rank ||
+      null,
+    degree:
+      employee.degree ||
+      null,
+    academicDepartment:
+      Array.isArray(
+        employee.academicDepartment
+      )
+        ? employee.academicDepartment
+        : [],
+    photoLink:
+      employee.photoLink ||
+      null
+  };
+}
+
 function normalizeWeeks(value) {
   if (Array.isArray(value)) {
     return value
@@ -706,11 +765,13 @@ export function normalizeLesson(
     ),
 
   employees:
-    Array.isArray(
-      lesson.employees
-    )
-      ? lesson.employees
-      : [],
+  Array.isArray(
+    lesson.employees
+  )
+    ? lesson.employees
+        .map(normalizeEmployee)
+        .filter(Boolean)
+    : [],
 
   auditories:
     Array.isArray(
