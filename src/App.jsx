@@ -232,12 +232,14 @@ function AppContent() {
         )}
 
         {activeTab === 'schedule' && (
-          <ScheduleView
-            scheduleData={scheduleData}
-            subgroup={subgroup}
-            loading={loading}
-            onLessonClick={setSelectedLesson}
-          />
+<ScheduleView
+  scheduleData={scheduleData}
+  group={group}
+  subgroup={subgroup}
+  loading={loading}
+  onLessonClick={setSelectedLesson}
+  onGroupChange={handleGroupChange}
+/>
         )}
 
         {activeTab === 'teachers' && (
