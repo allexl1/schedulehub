@@ -5,6 +5,71 @@ import {
   parseTimeRange
 } from '../../utils/time';
 
+function getEmployeeName(employee) {
+  if (!employee || typeof employee !== 'object') {
+    return '';
+  }
+
+  return (
+    employee.fio ||
+    employee.name ||
+    employee.fullName ||
+    employee.shortName ||
+    ''
+  );
+}
+
+function getEmployeePhoto(employee) {
+  if (!employee || typeof employee !== 'object') {
+    return '';
+  }
+
+  return (
+    employee.photo ||
+    employee.photoUrl ||
+    employee.image ||
+    employee.imageUrl ||
+    ''
+  );
+}
+
+function getLessonAccent(item) {
+  if (item?.color) {
+    return item.color;
+  }
+
+  if (item?.lessonColor) {
+    return item.lessonColor;
+  }
+
+  return 'var(--accent-primary, #2997ff)';
+}
+
+function getTeacher(item) {
+  if (item?.teacher) {
+    return item.teacher;
+  }
+
+  if (!Array.isArray(item?.employees)) {
+    return '';
+  }
+
+  return item.employees
+    .map(getEmployeeName)
+    .filter(Boolean)
+    .join(', ');
+}
+
+function getTeacherPhoto(item) {
+  if (!Array.isArray(item?.employees)) {
+    return '';
+  }
+
+  return getEmployeePhoto(
+    item.employees[0]
+  );
+}
+
 export default function ScheduleLessonCard({
   item,
   now,
@@ -44,51 +109,78 @@ export default function ScheduleLessonCard({
     item.endLessonTime ||
     '10:20';
 
+  const teacher =
+    getTeacher(item);
+
+  const teacherPhoto =
+    getTeacherPhoto(item);
+
+  const accent =
+    getLessonAccent(item);
+
   const handleLessonClick =
     () => {
-      if (
-        item.isPersonal
-      ) {
+      if (item.isPersonal) {
         return;
       }
 
       onLessonClick?.(item);
     };
 
-  const cardClass = `
-    w-full
-    p-4
-    flex
-    items-center
-    justify-between
-    gap-3
-    transition-all
-    text-left
-    ${
-      past
-        ? 'opacity-35'
-        : 'opacity-100'
-    }
-    ${
-      current
-        ? 'bg-white/10'
-        : ''
-    }
-  `;
+  const handleEdit =
+    event => {
+      event.stopPropagation();
+
+      onEditPersonalEvent?.(
+        item
+      );
+    };
+
+  const handleDelete =
+    event => {
+      event.stopPropagation();
+
+      onDeletePersonalEvent?.(
+        item.id
+      );
+    };
 
   return (
     <div
-      className={cardClass}
+      className={`flex w-full items-stretch gap-3 p-3 transition-all ${
+        past
+          ? 'opacity-40'
+          : 'opacity-100'
+      } ${
+        current
+          ? 'bg-white/5'
+          : ''
+      }`}
+      data-index={index}
     >
+      <div className="w-14 shrink-0 pt-0.5 text-right font-mono">
+        <span
+          className={`block text-xs font-bold ${
+            current
+              ? 'text-[#30d158]'
+              : next
+                ? 'text-[#2997ff]'
+                : 'text-[var(--text-primary)]'
+          }`}
+        >
+          {start}
+        </span>
+
+        <span className="mt-0.5 block text-[10px] text-[var(--text-secondary)]">
+          {end}
+        </span>
+      </div>
+
       <button
         type="button"
-        onClick={
-          handleLessonClick
-        }
-        disabled={
-          item.isPersonal
-        }
-        className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
+        onClick={handleLessonClick}
+        disabled={item.isPersonal}
+        className="group flex min-w-0 flex-1 items-stretch gap-3 text-left disabled:cursor-default"
         aria-label={
           item.isPersonal
             ? undefined
@@ -98,102 +190,142 @@ export default function ScheduleLessonCard({
               }`
         }
       >
-        <div className="w-20 shrink-0 font-mono">
-          <span
-            className={`block text-xs font-bold ${
-              current
-                ? 'text-[#30d158] text-sm'
-                : next
-                  ? 'text-[#2997ff]'
-                  : 'text-[var(--text-primary)]'
-            }`}
-          >
-            {start}
-          </span>
-
-          <span className="block text-[10px] text-[var(--text-secondary)]">
-            {end}
-          </span>
-        </div>
+        <span
+          aria-hidden="true"
+          className="w-1 shrink-0 rounded-full"
+          style={{
+            backgroundColor:
+              accent
+          }}
+        />
 
         <div className="min-w-0 flex-1">
-          <div className="mb-0.5 flex items-center gap-2">
-            <h4
-              className={`truncate text-sm ${
-                current
-                  ? 'text-base font-bold text-[var(--text-primary)]'
-                  : 'font-semibold text-[var(--text-primary)]'
-              }`}
-            >
-              {item.subject ||
-                'Lesson'}
-            </h4>
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <h4
+                className={`truncate text-sm ${
+                  current
+                    ? 'font-bold text-[var(--text-primary)]'
+                    : 'font-semibold text-[var(--text-primary)]'
+                }`}
+              >
+                {item.subject ||
+                  'Lesson'}
+              </h4>
 
-            {current && (
-              <span className="shrink-0 rounded bg-[#30d158]/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#30d158]">
-                NOW
-              </span>
-            )}
+              {item.subjectFullName &&
+                item.subjectFullName !==
+                  item.subject && (
+                  <p className="mt-0.5 truncate text-[10px] text-[var(--text-secondary)]">
+                    {
+                      item.subjectFullName
+                    }
+                  </p>
+                )}
+            </div>
 
-            {next && (
-              <span className="shrink-0 rounded bg-[#2997ff]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#2997ff]">
-                NEXT
-              </span>
-            )}
-
-            {item.isPersonal && (
-              <span className="shrink-0 rounded border border-white/10 bg-white/10 px-1.5 py-0.5 text-[9px] font-medium tracking-wider text-[var(--text-secondary)]">
-                Personal
-              </span>
-            )}
+            <span className="shrink-0 rounded-md bg-white/5 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+              {item.type ||
+                'Lecture'}
+            </span>
           </div>
 
-          <p className="truncate text-xs text-[var(--text-secondary)]">
-            {item.isPersonal ? (
-              <span className="italic">
-                Personal Activity
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--text-secondary)]">
+            <span>
+              Room{' '}
+              {item.room ||
+                '-'}
+            </span>
+
+            {item.numSubgroup &&
+              item.numSubgroup !==
+                'all' && (
+                <>
+                  <span aria-hidden="true">
+                    •
+                  </span>
+
+                  <span>
+                    Subgroup{' '}
+                    {
+                      item.numSubgroup
+                    }
+                  </span>
+                </>
+              )}
+          </div>
+
+          {teacher && (
+            <div className="mt-2 flex min-w-0 items-center gap-2">
+              <span className="min-w-0 truncate text-[11px] font-medium text-[var(--text-secondary)]">
+                {teacher}
               </span>
-            ) : (
-              <>
-                Room{' '}
-                {item.room ||
-                  '-'}{' '}
-                •{' '}
-                {item.teacher ||
-                  '-'}
-              </>
-            )}
-          </p>
+            </div>
+          )}
 
           {current &&
             minutesLeft !==
               null && (
-              <p className="mt-1 text-[11px] font-bold text-[#30d158]">
+              <p className="mt-1.5 text-[11px] font-bold text-[#30d158]">
                 Ends in{' '}
                 {minutesLeft}{' '}
                 min
               </p>
             )}
+
+          {current && (
+            <span className="mt-1.5 inline-flex rounded-md bg-[#30d158]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#30d158]">
+              Now
+            </span>
+          )}
+
+          {next && (
+            <span className="mt-1.5 inline-flex rounded-md bg-[#2997ff]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#2997ff]">
+              Next
+            </span>
+          )}
+
+          {item.isPersonal && (
+            <span className="mt-1.5 inline-flex rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-medium text-[var(--text-secondary)]">
+              Personal
+            </span>
+          )}
         </div>
 
-        <div className="shrink-0 text-right">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">
-            {item.type ||
-              'Lecture'}
-          </span>
-        </div>
+        {!item.isPersonal && (
+          <div className="flex w-11 shrink-0 items-start justify-end">
+            {teacherPhoto ? (
+              <img
+                src={teacherPhoto}
+                alt=""
+                loading="lazy"
+                className="h-10 w-10 rounded-full object-cover ring-1 ring-white/10"
+              />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-[11px] font-bold text-[var(--text-secondary)] ring-1 ring-white/10"
+              >
+                {teacher
+                  ? teacher
+                      .trim()
+                      .charAt(0)
+                      .toUpperCase()
+                  : '?'}
+              </div>
+            )}
+          </div>
+        )}
       </button>
 
       {item.isPersonal && (
-        <div className="ml-1 flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={() =>
-              onEditPersonalEvent?.(
-                item
-              )
+            onClick={
+              handleEdit
             }
-            className="rounded-md p-1 text-[var(--text-secondary)] transition-colors hover:bg-white/10 hover:text-[#2997ff]"
+            className="rounded-md p-1.5 text-[var(--text-secondary)] transition-colors hover:bg-white/10 hover:text-[#2997ff]"
             title="Edit event"
             aria-label="Edit personal event"
           >
@@ -202,12 +334,10 @@ export default function ScheduleLessonCard({
 
           <button
             type="button"
-            onClick={() =>
-              onDeletePersonalEvent?.(
-                item.id
-              )
+            onClick={
+              handleDelete
             }
-            className="rounded-md p-1 text-[var(--text-secondary)] transition-colors hover:bg-white/10 hover:text-[#ff3b30]"
+            className="rounded-md p-1.5 text-[var(--text-secondary)] transition-colors hover:bg-white/10 hover:text-[#ff3b30]"
             title="Delete event"
             aria-label="Delete personal event"
           >
