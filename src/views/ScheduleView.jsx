@@ -1,11 +1,15 @@
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState
 } from 'react';
 
+import ScheduleToolbar from '../components/schedule/ScheduleToolbar';
 import PersonalEventModal from '../components/schedule/PersonalEventModal';
 import ScheduleLessonCard from '../components/schedule/ScheduleLessonCard';
+import GroupSelectorSheet from '../components/schedule/GroupSelectorSheet';
+import GroupBrowser from '../components/schedule/GroupBrowser';
 
 import {
   getClassStatus,
@@ -16,9 +20,6 @@ import {
   resolveLessonsForDate
 } from '../utils/scheduleResolver';
 
-import GroupSelectorSheet from '../components/schedule/GroupSelectorSheet';
-import GroupBrowser from '../components/schedule/GroupBrowser';
-
 const DAYS = [
   { key: 1, label: 'Mon' },
   { key: 2, label: 'Tue' },
@@ -28,15 +29,21 @@ const DAYS = [
   { key: 6, label: 'Sat' }
 ];
 
+const PERSONAL_EVENTS_KEY =
+  'sh_personal_events';
+
 function addDays(date, amount) {
   const result = new Date(date);
-  result.setDate(result.getDate() + amount);
+  result.setDate(
+    result.getDate() + amount
+  );
   return result;
 }
 
 function startOfWeek(date) {
   const result = new Date(date);
   const day = result.getDay();
+
   const offset =
     day === 0
       ? -6
@@ -124,6 +131,53 @@ function hasLessons(schedules) {
   );
 }
 
+function readPersonalEvents() {
+  try {
+    const saved =
+      localStorage.getItem(
+        PERSONAL_EVENTS_KEY
+      );
+
+    if (!saved) {
+      return [];
+    }
+
+    const parsed =
+      JSON.parse(saved);
+
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatExamDate(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return value;
+  }
+
+  return date.toLocaleDateString(
+    'en-US',
+    {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    }
+  );
+}
+
 export default function ScheduleView({
   scheduleData,
   group,
@@ -132,24 +186,28 @@ export default function ScheduleView({
   onLessonClick,
   onGroupChange
 }) {
-  const [now, setNow] = useState(
-    () => new Date()
-  );
+  const [now, setNow] =
+    useState(() => new Date());
 
   const [
     selectedDate,
     setSelectedDate
   ] = useState(initialDate);
 
-const [
-  isGroupSelectorOpen,
-  setIsGroupSelectorOpen
-] = useState(false);
+  const [
+    activeAction,
+    setActiveAction
+  ] = useState('days');
 
-const [
-  isGroupBrowserOpen,
-  setIsGroupBrowserOpen
-] = useState(false);
+  const [
+    isGroupSelectorOpen,
+    setIsGroupSelectorOpen
+  ] = useState(false);
+
+  const [
+    isGroupBrowserOpen,
+    setIsGroupBrowserOpen
+  ] = useState(false);
 
   const [
     isModalOpen,
@@ -164,48 +222,33 @@ const [
   const [
     personalEvents,
     setPersonalEvents
-  ] = useState(() => {
-    try {
-      const saved =
-        localStorage.getItem(
-          'sh_personal_events'
-        );
+  ] = useState(
+    readPersonalEvents
+  );
 
-      if (!saved) {
-        return [];
-      }
+  const calendarInputRef =
+    useRef(null);
 
-      const parsed =
-        JSON.parse(saved);
-
-      return Array.isArray(parsed)
-        ? parsed
-        : [];
-    } catch {
-      return [];
-    }
-  });
+  const scheduleListRef =
+    useRef(null);
 
   useEffect(() => {
-    const timer = setInterval(
-      () => {
-        setNow(new Date());
-      },
-      5000
-    );
+    const timer =
+      setInterval(
+        () => {
+          setNow(new Date());
+        },
+        5000
+      );
 
-    return () => {
+    return () =>
       clearInterval(timer);
-    };
   }, []);
 
-  const data = useMemo(
-    () =>
-      getScheduleData(
-        scheduleData
-      ),
-    [scheduleData]
-  );
+  const data =
+    getScheduleData(
+      scheduleData
+    );
 
   const schedules =
     data?.schedules &&
@@ -228,173 +271,196 @@ const [
   const hasScheduleData =
     hasLessons(schedules);
 
-  const weekStart = useMemo(
-    () =>
-      startOfWeek(
-        selectedDate
-      ),
-    [selectedDate]
-  );
+  const weekStart =
+    useMemo(
+      () =>
+        startOfWeek(
+          selectedDate
+        ),
+      [selectedDate]
+    );
 
-  const weekDates = useMemo(
-    () =>
-      DAYS.map(day => ({
-        ...day,
-        date: addDays(
-          weekStart,
-          day.key - 1
-        )
-      })),
-    [weekStart]
-  );
+  const weekDates =
+    useMemo(
+      () =>
+        DAYS.map(day => ({
+          ...day,
+          date: addDays(
+            weekStart,
+            day.key - 1
+          )
+        })),
+      [weekStart]
+    );
 
-  const lessons = useMemo(
-    () =>
-      resolveLessonsForDate(
+  const lessons =
+    useMemo(
+      () =>
+        resolveLessonsForDate(
+          schedules,
+          selectedDate,
+          currentWeek,
+          subgroup,
+          {
+            referenceDate: now
+          }
+        ),
+      [
         schedules,
         selectedDate,
         currentWeek,
         subgroup,
-        {
-          referenceDate: now
-        }
-      ),
-    [
-      schedules,
-      selectedDate,
-      currentWeek,
-      subgroup,
-      now
-    ]
-  );
-
-  const events = useMemo(() => {
-    const day =
-      personalDay(
-        selectedDate
-      );
-
-    return personalEvents.filter(
-      event =>
-        event?.day === day
-    );
-  }, [
-    personalEvents,
-    selectedDate
-  ]);
-
-  const schedule = useMemo(() => {
-    const combined = [
-      ...lessons,
-      ...events
-    ].sort(
-      (a, b) =>
-        parseStartTimeInMinutes(
-          a.time
-        ) -
-        parseStartTimeInMinutes(
-          b.time
-        )
-    );
-
-    const isToday =
-      sameDate(
-        selectedDate,
         now
+      ]
+    );
+
+  const events =
+    useMemo(() => {
+      const day =
+        personalDay(
+          selectedDate
+        );
+
+      return personalEvents.filter(
+        event =>
+          event?.day === day
+      );
+    }, [
+      personalEvents,
+      selectedDate
+    ]);
+
+  const schedule =
+    useMemo(() => {
+      const combined = [
+        ...lessons,
+        ...events
+      ].sort(
+        (a, b) =>
+          parseStartTimeInMinutes(
+            a.time
+          ) -
+          parseStartTimeInMinutes(
+            b.time
+          )
       );
 
-    let nextFound = false;
-
-    return combined.map(item => {
-      if (item.isPersonal) {
-        return {
-          ...item,
-          status: 'upcoming'
-        };
-      }
-
-      const rawStatus =
-        getClassStatus(
-          item.time,
+      const isToday =
+        sameDate(
+          selectedDate,
           now
         );
 
-      let status =
-        rawStatus;
+      let nextFound = false;
 
-      if (
-        isToday &&
-        rawStatus === 'upcoming' &&
-        !nextFound
-      ) {
-        status = 'next';
-        nextFound = true;
-      }
+      return combined.map(
+        item => {
+          if (item.isPersonal) {
+            return {
+              ...item,
+              status: 'upcoming'
+            };
+          }
 
-      if (
-        rawStatus === 'current'
-      ) {
-        status = 'in_progress';
-      }
+          const rawStatus =
+            getClassStatus(
+              item.time,
+              now
+            );
 
-      if (
-        rawStatus === 'finished'
-      ) {
-        status = 'past';
-      }
+          let status =
+            rawStatus;
 
-      return {
-        ...item,
-        status
-      };
-    });
-  }, [
-    lessons,
-    events,
-    selectedDate,
-    now
-  ]);
+          if (
+            isToday &&
+            rawStatus ===
+              'upcoming' &&
+            !nextFound
+          ) {
+            status = 'next';
+            nextFound = true;
+          }
+
+          if (
+            rawStatus ===
+            'current'
+          ) {
+            status =
+              'in_progress';
+          }
+
+          if (
+            rawStatus ===
+            'finished'
+          ) {
+            status = 'past';
+          }
+
+          return {
+            ...item,
+            status
+          };
+        }
+      );
+    }, [
+      lessons,
+      events,
+      selectedDate,
+      now
+    ]);
 
   const selectedExamCount =
     useMemo(
       () =>
-        exams.filter(exam => {
-          if (!exam?.date) {
-            return false;
-          }
+        exams.filter(
+          exam => {
+            if (!exam?.date) {
+              return false;
+            }
 
-          const date =
-            new Date(
-              exam.date
+            const date =
+              new Date(
+                exam.date
+              );
+
+            return (
+              !Number.isNaN(
+                date.getTime()
+              ) &&
+              sameDate(
+                date,
+                selectedDate
+              )
             );
-
-          return (
-            !Number.isNaN(
-              date.getTime()
-            ) &&
-            sameDate(
-              date,
-              selectedDate
-            )
-          );
-        }).length,
+          }
+        ).length,
       [
         exams,
         selectedDate
       ]
     );
 
-  const selectDate = date => {
-    setSelectedDate(
-      new Date(date)
-    );
-  };
+  const selectDate =
+    date => {
+      setSelectedDate(
+        new Date(date)
+      );
 
-  const goToday = () => {
-    setSelectedDate(
-      initialDate()
-    );
-  };
+      setActiveAction(
+        'days'
+      );
+    };
+
+  const goToday =
+    () => {
+      setSelectedDate(
+        initialDate()
+      );
+
+      setActiveAction(
+        'days'
+      );
+    };
 
   const goPreviousWeek =
     () => {
@@ -406,14 +472,84 @@ const [
       );
     };
 
-  const goNextWeek = () => {
-    setSelectedDate(
-      addDays(
-        selectedDate,
-        7
-      )
-    );
-  };
+  const goNextWeek =
+    () => {
+      setSelectedDate(
+        addDays(
+          selectedDate,
+          7
+        )
+      );
+    };
+
+  const handleToolbarAction =
+    action => {
+      setActiveAction(action);
+
+      if (action === 'days') {
+        scheduleListRef.current?.scrollIntoView(
+          {
+            behavior: 'smooth',
+            block: 'start'
+          }
+        );
+
+        return;
+      }
+
+      if (
+        action === 'calendar'
+      ) {
+        calendarInputRef.current?.showPicker?.();
+        calendarInputRef.current?.focus();
+        return;
+      }
+
+      if (
+        action === 'favorites'
+      ) {
+        setIsGroupSelectorOpen(
+          true
+        );
+        return;
+      }
+    };
+
+  const handleCalendarChange =
+    event => {
+      const value =
+        event.target.value;
+
+      if (!value) {
+        return;
+      }
+
+      const [
+        year,
+        month,
+        day
+      ] = value
+        .split('-')
+        .map(Number);
+
+      const date =
+        new Date(
+          year,
+          month - 1,
+          day
+        );
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return;
+      }
+
+      setSelectedDate(date);
+      setActiveAction('days');
+    };
 
   const openCreateModal =
     () => {
@@ -427,57 +563,63 @@ const [
       setIsModalOpen(true);
     };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditingEvent(null);
-  };
+  const closeModal =
+    () => {
+      setIsModalOpen(false);
+      setEditingEvent(null);
+    };
 
-  const saveEvent = event => {
-    const exists =
-      personalEvents.some(
-        item =>
-          item.id === event.id
-      );
-
-    const updated = exists
-      ? personalEvents.map(
+  const saveEvent =
+    event => {
+      const exists =
+        personalEvents.some(
           item =>
-            item.id === event.id
-              ? event
-              : item
-        )
-      : [
-          ...personalEvents,
-          event
-        ];
+            item.id ===
+            event.id
+        );
 
-    setPersonalEvents(
-      updated
-    );
+      const updated =
+        exists
+          ? personalEvents.map(
+              item =>
+                item.id ===
+                event.id
+                  ? event
+                  : item
+            )
+          : [
+              ...personalEvents,
+              event
+            ];
 
-    try {
-      localStorage.setItem(
-        'sh_personal_events',
-        JSON.stringify(
-          updated
-        )
+      setPersonalEvents(
+        updated
       );
-    } catch (error) {
-      console.error(
-        'Failed to save personal events:',
-        error
-      );
-    }
 
-    closeModal();
-  };
+      try {
+        localStorage.setItem(
+          PERSONAL_EVENTS_KEY,
+          JSON.stringify(
+            updated
+          )
+        );
+      } catch (error) {
+        console.error(
+          'Failed to save personal events:',
+          error
+        );
+      }
+
+      closeModal();
+    };
 
   const deleteEvent =
     eventId => {
       const updated =
         personalEvents.filter(
           event =>
-            event.id !== eventId
+            event.id !==
+            eventId
         );
 
       setPersonalEvents(
@@ -486,7 +628,7 @@ const [
 
       try {
         localStorage.setItem(
-          'sh_personal_events',
+          PERSONAL_EVENTS_KEY,
           JSON.stringify(
             updated
           )
@@ -499,255 +641,427 @@ const [
       }
     };
 
+  const handleGroupChange =
+    selectedGroup => {
+      onGroupChange?.(
+        selectedGroup
+      );
+
+      setIsGroupSelectorOpen(
+        false
+      );
+      setIsGroupBrowserOpen(
+        false
+      );
+    };
+
+  const selectedDateInput =
+    [
+      selectedDate.getFullYear(),
+      String(
+        selectedDate.getMonth() + 1
+      ).padStart(2, '0'),
+      String(
+        selectedDate.getDate()
+      ).padStart(2, '0')
+    ].join('-');
+
   return (
     <div className="space-y-5">
 
-   <div className="flex items-center justify-between gap-3">
-  <div className="min-w-0">
-    <h2 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
-      Schedule
-    </h2>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
+            Schedule
+          </h2>
 
-    <button
-      type="button"
-      onClick={() =>
-        setIsGroupSelectorOpen(true)
-      }
-      className="mt-1 flex max-w-full items-center gap-1.5 rounded-lg text-left active:opacity-70"
-    >
-      <span className="truncate text-xs font-bold text-[#2997ff]">
-        {group || 'Select group'}
-      </span>
-
-      <span className="text-[10px] text-[#2997ff]">
-        ▾
-      </span>
-    </button>
-  </div>
-
-  <button
-    type="button"
-    onClick={openCreateModal}
-    className="shrink-0 rounded-xl bg-[#2997ff]/10 px-3 py-1.5 text-xs font-bold text-[#2997ff] transition-all active:scale-95"
-  >
-    + Add Event
-  </button>
-</div>
-
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={
-            goPreviousWeek
-          }
-          className="rounded-xl bg-[var(--surface-glass)] px-3 py-2 text-xs font-bold text-[var(--text-secondary)]"
-        >
-          Prev
-        </button>
-
-        <button
-          type="button"
-          onClick={goToday}
-          className="rounded-xl bg-[#2997ff]/10 px-3 py-2 text-xs font-bold text-[#2997ff]"
-        >
-          Today
-        </button>
-
-        <button
-          type="button"
-          onClick={
-            goNextWeek
-          }
-          className="rounded-xl bg-[var(--surface-glass)] px-3 py-2 text-xs font-bold text-[var(--text-secondary)]"
-        >
-          Next
-        </button>
-      </div>
-
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {weekDates.map(day => {
-          const selected =
-            sameDate(
-              day.date,
-              selectedDate
-            );
-
-          const today =
-            sameDate(
-              day.date,
-              now
-            );
-
-          return (
-            <button
-              key={day.key}
-              type="button"
-              onClick={() =>
-                selectDate(
-                  day.date
-                )
-              }
-              className={`min-w-[52px] flex-1 rounded-xl px-2 py-2 text-center transition-all ${
-                selected
-                  ? 'bg-[#2997ff] text-white shadow-sm'
-                  : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
-              }`}
-            >
-              <span className="block text-[10px] font-bold">
-                {day.label}
-              </span>
-
-              <span className="mt-0.5 block text-sm font-extrabold">
-                {day.date.getDate()}
-              </span>
-
-              {today && (
-                <span
-                  className={`mt-0.5 block text-[8px] font-medium ${
-                    selected
-                      ? 'text-white/80'
-                      : 'text-[#2997ff]'
-                  }`}
-                >
-                  Today
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex items-center justify-between px-0.5">
-        <div>
-          <p className="text-sm font-bold text-[var(--text-primary)]">
-            {formatFullDate(
-              selectedDate
-            )}
-          </p>
-
-          <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
-            Week {currentWeek} ·{' '}
-            {formatDate(
-              weekStart
-            )}{' '}
-            to{' '}
-            {formatDate(
-              addDays(
-                weekStart,
-                5
+          <button
+            type="button"
+            onClick={() =>
+              setIsGroupSelectorOpen(
+                true
               )
-            )}
-          </p>
+            }
+            className="mt-1 flex max-w-full items-center gap-1.5 rounded-lg text-left active:opacity-70"
+          >
+            <span className="truncate text-xs font-bold text-[#2997ff]">
+              {group ||
+                'Select group'}
+            </span>
+
+            <span
+              aria-hidden="true"
+              className="text-[10px] text-[#2997ff]"
+            >
+              ▾
+            </span>
+          </button>
         </div>
 
-        <span className="text-[10px] font-medium text-[var(--text-secondary)]">
-          {schedule.length}{' '}
-          items
-          {selectedExamCount >
-          0
-            ? ` · ${selectedExamCount} exam${
-                selectedExamCount >
-                1
-                  ? 's'
-                  : ''
-              }`
-            : ''}
-        </span>
+        <button
+          type="button"
+          onClick={
+            openCreateModal
+          }
+          className="shrink-0 rounded-xl bg-[#2997ff]/10 px-3 py-1.5 text-xs font-bold text-[#2997ff] transition-all active:scale-95"
+        >
+          + Add Event
+        </button>
       </div>
 
-      {!loading &&
-        !hasScheduleData && (
-          <div className="rounded-xl border border-[#f59e0b]/20 bg-[#f59e0b]/10 p-3 text-xs text-[#f59e0b]">
-            Academic timetable
-            data is not loaded.
-            Please check the
-            selected group or
-            reload the schedule.
-          </div>
-        )}
+      <ScheduleToolbar
+        activeAction={
+          activeAction
+        }
+        onAction={
+          handleToolbarAction
+        }
+      />
 
-      {loading ? (
-        <div className="rounded-2xl bg-[var(--surface-glass)] p-6 text-center text-xs text-[var(--text-secondary)]">
-          Loading timetable...
-        </div>
-      ) : schedule.length >
-        0 ? (
-        <div className="overflow-hidden rounded-2xl bg-[var(--surface-glass)] divide-y divide-[var(--border-glass)]">
-          {schedule.map(
-            (
-              item,
-              index
-            ) => (
-              <ScheduleLessonCard
-                key={
-                  item.id ||
-                  index
-                }
-                item={item}
-                now={now}
-                index={index}
-                onLessonClick={
-                  onLessonClick
-                }
-                onEditPersonalEvent={
-                  openEditModal
-                }
-                onDeletePersonalEvent={
-                  deleteEvent
-                }
-              />
-            )
+      <input
+        ref={
+          calendarInputRef
+        }
+        type="date"
+        value={
+          selectedDateInput
+        }
+        onChange={
+          handleCalendarChange
+        }
+        className="pointer-events-none absolute h-0 w-0 opacity-0"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+
+      {activeAction ===
+        'exams' ? (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-extrabold text-[var(--text-primary)]">
+              Exams
+            </h3>
+
+            <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+              {group ||
+                'Selected group'}
+            </p>
+          </div>
+
+          {exams.length > 0 ? (
+            <div className="overflow-hidden rounded-2xl bg-[var(--surface-glass)] divide-y divide-[var(--border-glass)]">
+              {exams.map(
+                (exam, index) => (
+                  <div
+                    key={
+                      exam.id ||
+                      `${exam.date}-${exam.subject}-${index}`
+                    }
+                    className="p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-[var(--text-primary)]">
+                          {exam.subject ||
+                            exam.name ||
+                            'Exam'}
+                        </p>
+
+                        {(exam.teacher ||
+                          exam.room) && (
+                          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                            {exam.teacher ||
+                              ''}
+                            {exam.teacher &&
+                            exam.room
+                              ? ' · '
+                              : ''}
+                            {exam.room
+                              ? `Room ${exam.room}`
+                              : ''}
+                          </p>
+                        )}
+                      </div>
+
+                      <span className="shrink-0 text-[10px] font-bold text-[#2997ff]">
+                        {formatExamDate(
+                          exam.date
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-[var(--surface-glass)] p-6 text-center text-xs text-[var(--text-secondary)]">
+              No exams available
+              for this group.
+            </div>
           )}
-        </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setActiveAction(
+                'days'
+              )
+            }
+            className="w-full rounded-xl bg-[#2997ff]/10 px-4 py-2.5 text-xs font-bold text-[#2997ff]"
+          >
+            Back to schedule
+          </button>
+        </section>
       ) : (
-        <div className="rounded-2xl bg-[var(--surface-glass)] p-6 text-center text-xs text-[var(--text-secondary)]">
-          No classes or
-          events scheduled
-          for{' '}
-          {formatFullDate(
-            selectedDate
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={
+                goPreviousWeek
+              }
+              className="rounded-xl bg-[var(--surface-glass)] px-3 py-2 text-xs font-bold text-[var(--text-secondary)]"
+            >
+              Prev
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                goToday
+              }
+              className="rounded-xl bg-[#2997ff]/10 px-3 py-2 text-xs font-bold text-[#2997ff]"
+            >
+              Today
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                goNextWeek
+              }
+              className="rounded-xl bg-[var(--surface-glass)] px-3 py-2 text-xs font-bold text-[var(--text-secondary)]"
+            >
+              Next
+            </button>
+          </div>
+
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {weekDates.map(
+              day => {
+                const selected =
+                  sameDate(
+                    day.date,
+                    selectedDate
+                  );
+
+                const today =
+                  sameDate(
+                    day.date,
+                    now
+                  );
+
+                return (
+                  <button
+                    key={
+                      day.key
+                    }
+                    type="button"
+                    onClick={() =>
+                      selectDate(
+                        day.date
+                      )
+                    }
+                    className={`min-w-[52px] flex-1 rounded-xl px-2 py-2 text-center transition-all ${
+                      selected
+                        ? 'bg-[#2997ff] text-white shadow-sm'
+                        : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    <span className="block text-[10px] font-bold">
+                      {day.label}
+                    </span>
+
+                    <span className="mt-0.5 block text-sm font-extrabold">
+                      {day.date.getDate()}
+                    </span>
+
+                    {today && (
+                      <span
+                        className={`mt-0.5 block text-[8px] font-medium ${
+                          selected
+                            ? 'text-white/80'
+                            : 'text-[#2997ff]'
+                        }`}
+                      >
+                        Today
+                      </span>
+                    )}
+                  </button>
+                );
+              }
+            )}
+          </div>
+
+          <div
+            ref={
+              scheduleListRef
+            }
+            className="flex items-center justify-between px-0.5"
+          >
+            <div>
+              <p className="text-sm font-bold text-[var(--text-primary)]">
+                {formatFullDate(
+                  selectedDate
+                )}
+              </p>
+
+              <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+                Week{' '}
+                {currentWeek} ·{' '}
+                {formatDate(
+                  weekStart
+                )}{' '}
+                to{' '}
+                {formatDate(
+                  addDays(
+                    weekStart,
+                    5
+                  )
+                )}
+              </p>
+            </div>
+
+            <span className="text-[10px] font-medium text-[var(--text-secondary)]">
+              {schedule.length}{' '}
+              items
+              {selectedExamCount >
+              0
+                ? ` · ${selectedExamCount} exam${
+                    selectedExamCount >
+                    1
+                      ? 's'
+                      : ''
+                  }`
+                : ''}
+            </span>
+          </div>
+
+          {!loading &&
+            !hasScheduleData && (
+              <div className="rounded-xl border border-[#f59e0b]/20 bg-[#f59e0b]/10 p-3 text-xs text-[#f59e0b]">
+                Academic timetable
+                data is not
+                loaded. Please
+                check the selected
+                group or reload
+                the schedule.
+              </div>
+            )}
+
+          {loading ? (
+            <div className="rounded-2xl bg-[var(--surface-glass)] p-6 text-center text-xs text-[var(--text-secondary)]">
+              Loading timetable...
+            </div>
+          ) : schedule.length >
+            0 ? (
+            <div className="overflow-hidden rounded-2xl bg-[var(--surface-glass)] divide-y divide-[var(--border-glass)]">
+              {schedule.map(
+                (
+                  item,
+                  index
+                ) => (
+                  <ScheduleLessonCard
+                    key={
+                      item.id ||
+                      index
+                    }
+                    item={item}
+                    now={now}
+                    index={
+                      index
+                    }
+                    onLessonClick={
+                      onLessonClick
+                    }
+                    onEditPersonalEvent={
+                      openEditModal
+                    }
+                    onDeletePersonalEvent={
+                      deleteEvent
+                    }
+                  />
+                )
+              )}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-[var(--surface-glass)] p-6 text-center text-xs text-[var(--text-secondary)]">
+              No classes or
+              events scheduled
+              for{' '}
+              {formatFullDate(
+                selectedDate
+              )}
+              .
+            </div>
           )}
-          .
-        </div>
+        </>
       )}
 
       <PersonalEventModal
-        isOpen={isModalOpen}
-        onClose={closeModal}
-        onSaveEvent={saveEvent}
+        isOpen={
+          isModalOpen
+        }
+        onClose={
+          closeModal
+        }
+        onSaveEvent={
+          saveEvent
+        }
         initialEvent={
           editingEvent
         }
       />
-      {isGroupSelectorOpen && (
-  <GroupSelectorSheet
-    currentGroup={group}
-    onSelectGroup={selectedGroup => {
-      onGroupChange(selectedGroup);
-      setIsGroupSelectorOpen(false);
-    }}
-    onOpenBrowser={() => {
-      setIsGroupSelectorOpen(false);
-      setIsGroupBrowserOpen(true);
-    }}
-    onClose={() =>
-      setIsGroupSelectorOpen(false)
-    }
-  />
-)}
 
-{isGroupBrowserOpen && (
-  <GroupBrowser
-    currentGroup={group}
-    onSelectGroup={selectedGroup => {
-      onGroupChange(selectedGroup);
-      setIsGroupBrowserOpen(false);
-    }}
-    onClose={() =>
-      setIsGroupBrowserOpen(false)
-    }
-  />
-)}
+      {isGroupSelectorOpen && (
+        <GroupSelectorSheet
+          currentGroup={
+            group
+          }
+          onSelectGroup={
+            handleGroupChange
+          }
+          onOpenBrowser={() => {
+            setIsGroupSelectorOpen(
+              false
+            );
+            setIsGroupBrowserOpen(
+              true
+            );
+          }}
+          onClose={() =>
+            setIsGroupSelectorOpen(
+              false
+            )
+          }
+        />
+      )}
+
+      {isGroupBrowserOpen && (
+        <GroupBrowser
+          currentGroup={
+            group
+          }
+          onSelectGroup={
+            handleGroupChange
+          }
+          onClose={() =>
+            setIsGroupBrowserOpen(
+              false
+            )
+          }
+        />
+      )}
     </div>
   );
 }
