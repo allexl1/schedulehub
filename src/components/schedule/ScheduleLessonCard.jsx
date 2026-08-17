@@ -6,43 +6,15 @@ import {
 } from '../../utils/time';
 
 function getEmployeeName(employee) {
-  if (!employee || typeof employee !== 'object') {
-    return '';
-  }
-
-  return (
-    employee.fio ||
-    employee.name ||
-    employee.fullName ||
-    employee.shortName ||
-    ''
-  );
-}
-
-function getEmployeePhoto(employee) {
-  if (!employee || typeof employee !== 'object') {
-    return '';
-  }
-
-  return (
-    employee.photo ||
-    employee.photoUrl ||
-    employee.image ||
-    employee.imageUrl ||
-    ''
-  );
+  return employee?.fio || '';
 }
 
 function getLessonAccent(item) {
-  if (item?.color) {
-    return item.color;
-  }
-
-  if (item?.lessonColor) {
-    return item.lessonColor;
-  }
-
-  return 'var(--accent-primary, #2997ff)';
+  return (
+    item?.color ||
+    item?.lessonColor ||
+    'var(--accent-primary, #2997ff)'
+  );
 }
 
 function getTeacher(item) {
@@ -61,21 +33,11 @@ function getTeacher(item) {
 }
 
 function getTeacherPhoto(item) {
-  if (
-    !Array.isArray(item?.employees)
-  ) {
+  if (!Array.isArray(item?.employees)) {
     return '';
   }
 
-  return (
-    item.employees[0]
-      ?.photoLink || ''
-  );
-}
-
-  return getEmployeePhoto(
-    item.employees[0]
-  );
+  return item.employees[0]?.photoLink || '';
 }
 
 export default function ScheduleLessonCard({
@@ -103,9 +65,7 @@ export default function ScheduleLessonCard({
     : null;
 
   const range =
-    parseTimeRange(
-      item.time
-    );
+    parseTimeRange(item.time);
 
   const start =
     range?.startTime ||
@@ -155,6 +115,7 @@ export default function ScheduleLessonCard({
 
   return (
     <div
+      data-index={index}
       className={`flex w-full items-stretch gap-3 p-3 transition-all ${
         past
           ? 'opacity-40'
@@ -164,7 +125,6 @@ export default function ScheduleLessonCard({
           ? 'bg-white/5'
           : ''
       }`}
-      data-index={index}
     >
       <div className="w-14 shrink-0 pt-0.5 text-right font-mono">
         <span
@@ -264,8 +224,8 @@ export default function ScheduleLessonCard({
           </div>
 
           {teacher && (
-            <div className="mt-2 flex min-w-0 items-center gap-2">
-              <span className="min-w-0 truncate text-[11px] font-medium text-[var(--text-secondary)]">
+            <div className="mt-2 min-w-0">
+              <span className="block truncate text-[11px] font-medium text-[var(--text-secondary)]">
                 {teacher}
               </span>
             </div>
@@ -330,9 +290,7 @@ export default function ScheduleLessonCard({
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={
-              handleEdit
-            }
+            onClick={handleEdit}
             className="rounded-md p-1.5 text-[var(--text-secondary)] transition-colors hover:bg-white/10 hover:text-[#2997ff]"
             title="Edit event"
             aria-label="Edit personal event"
@@ -342,9 +300,7 @@ export default function ScheduleLessonCard({
 
           <button
             type="button"
-            onClick={
-              handleDelete
-            }
+            onClick={handleDelete}
             className="rounded-md p-1.5 text-[var(--text-secondary)] transition-colors hover:bg-white/10 hover:text-[#ff3b30]"
             title="Delete event"
             aria-label="Delete personal event"
