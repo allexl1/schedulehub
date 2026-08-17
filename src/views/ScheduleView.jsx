@@ -10,16 +10,13 @@ import PersonalEventModal from '../components/schedule/PersonalEventModal';
 import ScheduleLessonCard from '../components/schedule/ScheduleLessonCard';
 import GroupSelectorSheet from '../components/schedule/GroupSelectorSheet';
 import GroupBrowser from '../components/schedule/GroupBrowser';
-
 import {
   getClassStatus,
   parseStartTimeInMinutes
 } from '../utils/time';
-
 import {
   resolveLessonsForDate
 } from '../utils/scheduleResolver';
-
 const DAYS = [
   { key: 1, label: 'Mon' },
   { key: 2, label: 'Tue' },
