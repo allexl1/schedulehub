@@ -4,9 +4,7 @@ import ScheduleLessonCard from '../components/schedule/ScheduleLessonCard';
 
 import {
   getClassStatus,
-  getMinutesUntilEnd,
-  parseStartTimeInMinutes,
-  parseTimeRange
+  parseStartTimeInMinutes
 } from '../utils/time';
 
 import { resolveLessonsForDate } from '../utils/scheduleResolver';
@@ -498,42 +496,17 @@ export default function ScheduleView({
         </div>
       ) : schedule.length > 0 ? (
         <div className="bg-[var(--surface-glass)] rounded-2xl overflow-hidden divide-y divide-[var(--border-glass)]">
-          {schedule.map((item, index) => {
-            const past =
-              item.status === 'past';
-
-            const current =
-              item.status === 'in_progress';
-
-            const next =
-              item.status === 'next';
-
-            const minutesLeft = current
-              ? getMinutesUntilEnd(
-                  item.time,
-                  now
-                )
-              : null;
-
-            const range =
-              parseTimeRange(item.time);
-
-            const start =
-              range?.startTime ||
-              item.startLessonTime ||
-              '09:00';
-
-            const end =
-              range?.endTime ||
-              item.endLessonTime ||
-              '10:20';
-
-            return (
-              <div
-                key={item.id || index}
-                onClick={() =>
-                  onLessonClick?.(item)
-                }
+ {schedule.map((item, index) => (
+  <ScheduleLessonCard
+    key={item.id || index}
+    item={item}
+    now={now}
+    index={index}
+    onLessonClick={onLessonClick}
+    onEditPersonalEvent={openEditModal}
+    onDeletePersonalEvent={deleteEvent}
+  />
+)}
                 className={`w-full p-4 flex items-center justify-between gap-3 transition-all text-left ${
                   past
                     ? 'opacity-35'
