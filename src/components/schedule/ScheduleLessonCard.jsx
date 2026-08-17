@@ -30,7 +30,9 @@ export default function ScheduleLessonCard({
     : null;
 
   const range =
-    parseTimeRange(item.time);
+    parseTimeRange(
+      item.time
+    );
 
   const start =
     range?.startTime ||
@@ -42,158 +44,177 @@ export default function ScheduleLessonCard({
     item.endLessonTime ||
     '10:20';
 
-  const handleClick = () => {
-    onLessonClick?.(item);
-  };
+  const handleLessonClick =
+    () => {
+      if (
+        item.isPersonal
+      ) {
+        return;
+      }
+
+      onLessonClick?.(item);
+    };
+
+  const cardClass = `
+    w-full
+    p-4
+    flex
+    items-center
+    justify-between
+    gap-3
+    transition-all
+    text-left
+    ${
+      past
+        ? 'opacity-35'
+        : 'opacity-100'
+    }
+    ${
+      current
+        ? 'bg-white/10'
+        : ''
+    }
+  `;
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className={`w-full p-4 flex items-center justify-between gap-3 transition-all text-left ${
-        past
-          ? 'opacity-35'
-          : 'opacity-100'
-      } ${
-        current
-          ? 'bg-white/10'
-          : ''
-      }`}
-      aria-label={`Open ${
-        item.subject || 'lesson'
-      }`}
+    <div
+      className={cardClass}
     >
-      <div className="w-20 shrink-0 font-mono">
-        <span
-          className={`block text-xs font-bold ${
-            current
-              ? 'text-[#30d158] text-sm'
-              : next
-                ? 'text-[#2997ff]'
-                : 'text-[var(--text-primary)]'
-          }`}
-        >
-          {start}
-        </span>
-
-        <span className="block text-[10px] text-[var(--text-secondary)]">
-          {end}
-        </span>
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <h4
-            className={`text-sm truncate ${
+      <button
+        type="button"
+        onClick={
+          handleLessonClick
+        }
+        disabled={
+          item.isPersonal
+        }
+        className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
+        aria-label={
+          item.isPersonal
+            ? undefined
+            : `Open ${
+                item.subject ||
+                'lesson'
+              }`
+        }
+      >
+        <div className="w-20 shrink-0 font-mono">
+          <span
+            className={`block text-xs font-bold ${
               current
-                ? 'font-bold text-base text-[var(--text-primary)]'
-                : 'font-semibold text-[var(--text-primary)]'
+                ? 'text-[#30d158] text-sm'
+                : next
+                  ? 'text-[#2997ff]'
+                  : 'text-[var(--text-primary)]'
             }`}
           >
-            {item.subject || 'Lesson'}
-          </h4>
+            {start}
+          </span>
 
-          {current && (
-            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#30d158]/20 text-[#30d158] shrink-0">
-              NOW
-            </span>
-          )}
-
-          {next && (
-            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#2997ff]/15 text-[#2997ff] shrink-0">
-              NEXT
-            </span>
-          )}
-
-          {item.isPersonal && (
-            <span className="text-[9px] font-medium tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-[var(--text-secondary)] border border-white/10 shrink-0">
-              Personal
-            </span>
-          )}
+          <span className="block text-[10px] text-[var(--text-secondary)]">
+            {end}
+          </span>
         </div>
 
-        <p className="text-xs text-[var(--text-secondary)] truncate">
-          {item.isPersonal ? (
-            <span className="italic">
-              Personal Activity
-            </span>
-          ) : (
-            <>
-              Room {item.room || '-'}{' '}
-              • {item.teacher || '-'}
-            </>
-          )}
-        </p>
-
-        {current &&
-          minutesLeft !== null && (
-            <p className="text-[11px] font-bold text-[#30d158] mt-1">
-              Ends in {minutesLeft} min
-            </p>
-          )}
-      </div>
-
-      <div className="text-right shrink-0 flex items-center gap-1.5">
-        <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-          {item.type || 'Lecture'}
-        </span>
-
-        {item.isPersonal && (
-          <div className="flex items-center gap-1 ml-1">
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={event => {
-                event.stopPropagation();
-                onEditPersonalEvent?.(item);
-              }}
-              onKeyDown={event => {
-                if (
-                  event.key === 'Enter' ||
-                  event.key === ' '
-                ) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onEditPersonalEvent?.(item);
-                }
-              }}
-              className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#2997ff] hover:bg-white/10 transition-colors"
-              title="Edit event"
-              aria-label="Edit personal event"
+        <div className="min-w-0 flex-1">
+          <div className="mb-0.5 flex items-center gap-2">
+            <h4
+              className={`truncate text-sm ${
+                current
+                  ? 'text-base font-bold text-[var(--text-primary)]'
+                  : 'font-semibold text-[var(--text-primary)]'
+              }`}
             >
-              ✎
-            </span>
+              {item.subject ||
+                'Lesson'}
+            </h4>
 
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={event => {
-                event.stopPropagation();
-                onDeletePersonalEvent?.(
-                  item.id
-                );
-              }}
-              onKeyDown={event => {
-                if (
-                  event.key === 'Enter' ||
-                  event.key === ' '
-                ) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDeletePersonalEvent?.(
-                    item.id
-                  );
-                }
-              }}
-              className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[#ff3b30] hover:bg-white/10 transition-colors"
-              title="Delete event"
-              aria-label="Delete personal event"
-            >
-              ×
-            </span>
+            {current && (
+              <span className="shrink-0 rounded bg-[#30d158]/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#30d158]">
+                NOW
+              </span>
+            )}
+
+            {next && (
+              <span className="shrink-0 rounded bg-[#2997ff]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#2997ff]">
+                NEXT
+              </span>
+            )}
+
+            {item.isPersonal && (
+              <span className="shrink-0 rounded border border-white/10 bg-white/10 px-1.5 py-0.5 text-[9px] font-medium tracking-wider text-[var(--text-secondary)]">
+                Personal
+              </span>
+            )}
           </div>
-        )}
-      </div>
-    </button>
+
+          <p className="truncate text-xs text-[var(--text-secondary)]">
+            {item.isPersonal ? (
+              <span className="italic">
+                Personal Activity
+              </span>
+            ) : (
+              <>
+                Room{' '}
+                {item.room ||
+                  '-'}{' '}
+                •{' '}
+                {item.teacher ||
+                  '-'}
+              </>
+            )}
+          </p>
+
+          {current &&
+            minutesLeft !==
+              null && (
+              <p className="mt-1 text-[11px] font-bold text-[#30d158]">
+                Ends in{' '}
+                {minutesLeft}{' '}
+                min
+              </p>
+            )}
+        </div>
+
+        <div className="shrink-0 text-right">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">
+            {item.type ||
+              'Lecture'}
+          </span>
+        </div>
+      </button>
+
+      {item.isPersonal && (
+        <div className="ml-1 flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() =>
+              onEditPersonalEvent?.(
+                item
+              )
+            }
+            className="rounded-md p-1 text-[var(--text-secondary)] transition-colors hover:bg-white/10 hover:text-[#2997ff]"
+            title="Edit event"
+            aria-label="Edit personal event"
+          >
+            ✎
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              onDeletePersonalEvent?.(
+                item.id
+              )
+            }
+            className="rounded-md p-1 text-[var(--text-secondary)] transition-colors hover:bg-white/10 hover:text-[#ff3b30]"
+            title="Delete event"
+            aria-label="Delete personal event"
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
