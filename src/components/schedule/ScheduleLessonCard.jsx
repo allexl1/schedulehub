@@ -61,9 +61,17 @@ function getTeacher(item) {
 }
 
 function getTeacherPhoto(item) {
-  if (!Array.isArray(item?.employees)) {
+  if (
+    !Array.isArray(item?.employees)
+  ) {
     return '';
   }
+
+  return (
+    item.employees[0]
+      ?.photoLink || ''
+  );
+}
 
   return getEmployeePhoto(
     item.employees[0]
