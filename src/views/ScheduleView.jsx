@@ -1,11 +1,11 @@
 import React, {
   useEffect,
   useMemo,
-  useRef,
   useState
 } from 'react';
 import LessonDetailsSheet from '../components/schedule/LessonDetailsSheet';
 import ScheduleToolbar from '../components/schedule/ScheduleToolbar';
+import ScheduleCalendar from '../components/schedule/ScheduleCalendar';
 import PersonalEventModal from '../components/schedule/PersonalEventModal';
 import ScheduleLessonCard from '../components/schedule/ScheduleLessonCard';
 import GroupSelectorSheet from '../components/schedule/GroupSelectorSheet';
@@ -230,9 +230,6 @@ const [
   ] = useState(
     readPersonalEvents
   );
-
-  const calendarInputRef =
-    useRef(null);
 
   const scheduleListRef =
     useRef(null);
@@ -502,13 +499,9 @@ const [
         return;
       }
 
-      if (
-        action === 'calendar'
-      ) {
-        calendarInputRef.current?.showPicker?.();
-        calendarInputRef.current?.focus();
-        return;
-      }
+      if (action === 'calendar') {
+  return;
+}
 
       if (
         action === 'favorites'
@@ -519,15 +512,6 @@ const [
         return;
       }
     };
-
-  const handleCalendarChange =
-    event => {
-      const value =
-        event.target.value;
-
-      if (!value) {
-        return;
-      }
 
       const [
         year,
@@ -660,17 +644,6 @@ const [
       );
     };
 
-  const selectedDateInput =
-    [
-      selectedDate.getFullYear(),
-      String(
-        selectedDate.getMonth() + 1
-      ).padStart(2, '0'),
-      String(
-        selectedDate.getDate()
-      ).padStart(2, '0')
-    ].join('-');
-
   return (
     <div className="space-y-5">
 
@@ -722,22 +695,16 @@ const [
           handleToolbarAction
         }
       />
-
-      <input
-        ref={
-          calendarInputRef
-        }
-        type="date"
-        value={
-          selectedDateInput
-        }
-        onChange={
-          handleCalendarChange
-        }
-        className="pointer-events-none absolute h-0 w-0 opacity-0"
-        tabIndex={-1}
-        aria-hidden="true"
-      />
+      
+      {activeAction === 'calendar' && (
+  <ScheduleCalendar
+    schedules={schedules}
+    selectedDate={selectedDate}
+    subgroup={subgroup}
+    referenceDate={now}
+    onSelectDate={selectDate}
+  />
+)}
 
       {activeAction ===
         'exams' ? (
