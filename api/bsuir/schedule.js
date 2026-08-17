@@ -25,7 +25,9 @@ function redisConfig() {
 async function redisGet(key) {
   const { url, token } = redisConfig();
 
-  if (!url || !token) return null;
+  if (!url || !token) {
+    return null;
+  }
 
   try {
     const response = await fetch(
@@ -37,11 +39,15 @@ async function redisGet(key) {
       }
     );
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return null;
+    }
 
     const result = await response.json();
 
-    if (!result.result) return null;
+    if (!result.result) {
+      return null;
+    }
 
     return JSON.parse(result.result);
   } catch {
@@ -52,7 +58,9 @@ async function redisGet(key) {
 async function redisSet(key, value) {
   const { url, token } = redisConfig();
 
-  if (!url || !token) return false;
+  if (!url || !token) {
+    return false;
+  }
 
   try {
     const encoded = encodeURIComponent(
@@ -60,7 +68,9 @@ async function redisSet(key, value) {
     );
 
     const response = await fetch(
-      `${url}/set/${encodeURIComponent(key)}/${encoded}?ex=${CACHE_TTL}`,
+      `${url}/set/${encodeURIComponent(
+        key
+      )}/${encoded}?ex=${CACHE_TTL}`,
       {
         headers: {
           Authorization: `Bearer ${token}`
@@ -75,7 +85,8 @@ async function redisSet(key, value) {
 }
 
 async function fetchJson(url) {
-  const controller = new AbortController();
+  const controller =
+    new AbortController();
 
   const timer = setTimeout(
     () => controller.abort(),
@@ -83,16 +94,23 @@ async function fetchJson(url) {
   );
 
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "User-Agent": "ScheduleHub/1.0"
+    const response = await fetch(
+      url,
+      {
+        signal: controller.signal,
+        headers: {
+          Accept:
+            "application/json, text/plain, */*",
+          "User-Agent":
+            "ScheduleHub/1.0"
+        }
       }
-    });
+    );
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(
+        `HTTP ${response.status}`
+      );
     }
 
     return await response.json();
@@ -102,15 +120,57 @@ async function fetchJson(url) {
 }
 
 function hasSchedules(schedules) {
-  if (!schedules || typeof schedules !== "object") {
+  if (
+    !schedules ||
+    typeof schedules !== "object"
+  ) {
     return false;
   }
 
-  return Object.values(schedules).some(
+  return Object.values(
+    schedules
+  ).some(
     value =>
       Array.isArray(value) &&
       value.length > 0
   );
+}
+
+function getActualSchedules(
+  scheduleData
+) {
+  if (
+    !scheduleData ||
+    typeof scheduleData !== "object"
+  ) {
+    return {};
+  }
+
+  if (
+    hasSchedules(
+      scheduleData.schedules
+    )
+  ) {
+    return scheduleData.schedules;
+  }
+
+  if (
+    hasSchedules(
+      scheduleData.nextSchedules
+    )
+  ) {
+    return scheduleData.nextSchedules;
+  }
+
+  if (
+    hasSchedules(
+      scheduleData.previousSchedules
+    )
+  ) {
+    return scheduleData.previousSchedules;
+  }
+
+  return {};
 }
 
 function validWeek(value) {
@@ -123,29 +183,58 @@ function validWeek(value) {
     : null;
 }
 
-function normalizeSubgroup(value) {
-  const raw = String(value ?? "all")
-    .trim()
-    .toLowerCase();
+function extractCurrentWeek(value) {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return validWeek(
+      value.currentWeek ??
+      value.week ??
+      value.weekNumber ??
+      value.value
+    );
+  }
 
-  if (raw === "1") return 1;
-  if (raw === "2") return 2;
+  return validWeek(value);
+}
+
+function normalizeSubgroup(value) {
+  const raw =
+    String(value ?? "all")
+      .trim()
+      .toLowerCase();
+
+  if (raw === "1") {
+    return 1;
+  }
+
+  if (raw === "2") {
+    return 2;
+  }
 
   return "all";
 }
 
-function fallbackData(studentGroup) {
+function fallbackData(
+  studentGroup,
+  currentWeek
+) {
   return {
     studentGroup,
     schedules: {},
     todaySchedules: [],
     exams: [],
-    currentWeek: 1,
+    currentWeek:
+      currentWeek || 1,
     nextLesson: null
   };
 }
 
-export default async function handler(req, res) {
+export default async function handler(
+  req,
+  res
+) {
   res.setHeader(
     "Cache-Control",
     "s-maxage=3600, stale-while-revalidate=86400"
@@ -163,7 +252,8 @@ export default async function handler(req, res) {
       fallback: false,
       stale: false,
       debug: {
-        error: "Missing group parameter"
+        error:
+          "Missing group parameter"
       },
       data: null
     });
@@ -182,11 +272,14 @@ export default async function handler(req, res) {
   if (!groupResult.valid) {
     return res.status(400).json({
       success: false,
-      cached: groupResult.cached,
+      cached:
+        groupResult.cached,
       fallback: false,
-      stale: groupResult.stale,
+      stale:
+        groupResult.stale,
       debug: {
-        error: groupResult.reason,
+        error:
+          groupResult.reason,
         requestedGroup,
         groupSource:
           groupResult.cached
@@ -224,8 +317,8 @@ export default async function handler(req, res) {
   let scheduleData = null;
   let currentWeek = null;
 
-  let cached = false;
-  let stale = false;
+  let scheduleCached = false;
+  let weekCached = false;
 
   const results =
     await Promise.allSettled([
@@ -239,105 +332,174 @@ export default async function handler(req, res) {
       )
     ]);
 
-  const scheduleResult = results[0];
-  const weekResult = results[1];
+  const scheduleResult =
+    results[0];
+
+  const weekResult =
+    results[1];
 
   if (
-    scheduleResult.status === "fulfilled" &&
-    hasSchedules(
-      scheduleResult.value?.schedules
-    )
+    scheduleResult.status ===
+      "fulfilled"
   ) {
-    scheduleData =
-      scheduleResult.value;
+    const actualSchedules =
+      getActualSchedules(
+        scheduleResult.value
+      );
 
-    debug.scheduleSource = "bsuir";
+    if (
+      hasSchedules(
+        actualSchedules
+      )
+    ) {
+      scheduleData = {
+        ...scheduleResult.value,
+        schedules:
+          actualSchedules
+      };
+
+      debug.scheduleSource =
+        scheduleResult.value
+          .schedules &&
+        hasSchedules(
+          scheduleResult.value
+            .schedules
+        )
+          ? "bsuir"
+          : scheduleResult.value
+                .nextSchedules &&
+            hasSchedules(
+              scheduleResult.value
+                .nextSchedules
+            )
+            ? "bsuir-next"
+            : "bsuir-previous";
+    } else {
+      debug.scheduleSource =
+        "bsuir-empty";
+    }
   } else {
     debug.scheduleSource =
-      scheduleResult.status === "rejected"
-        ? "bsuir-error"
-        : "bsuir-empty";
+      "bsuir-error";
   }
 
-  if (weekResult.status === "fulfilled") {
-    currentWeek = validWeek(
-      weekResult.value
-    );
+  if (
+    weekResult.status ===
+    "fulfilled"
+  ) {
+    currentWeek =
+      extractCurrentWeek(
+        weekResult.value
+      );
   }
 
   if (currentWeek) {
-    debug.weekSource = "bsuir";
+    debug.weekSource =
+      "bsuir";
   } else {
     debug.weekSource =
-      weekResult.status === "rejected"
+      weekResult.status ===
+      "rejected"
         ? "bsuir-error"
         : "bsuir-invalid";
   }
 
   if (!scheduleData) {
     const cachedSchedule =
-      await redisGet(scheduleKey);
+      await redisGet(
+        scheduleKey
+      );
+
+    const actualCachedSchedules =
+      getActualSchedules(
+        cachedSchedule
+      );
 
     if (
-      cachedSchedule &&
       hasSchedules(
-        cachedSchedule.schedules
+        actualCachedSchedules
       )
     ) {
-      scheduleData =
-        cachedSchedule;
+      scheduleData = {
+        ...cachedSchedule,
+        schedules:
+          actualCachedSchedules
+      };
 
-      cached = true;
-      stale = true;
+      scheduleCached = true;
 
       debug.scheduleSource =
-        "redis";
+        cachedSchedule?.schedules &&
+        hasSchedules(
+          cachedSchedule.schedules
+        )
+          ? "redis"
+          : cachedSchedule?.nextSchedules &&
+            hasSchedules(
+              cachedSchedule
+                .nextSchedules
+            )
+          ? "redis-next"
+          : "redis-previous";
     }
   }
 
   if (!currentWeek) {
     const cachedWeek =
-      await redisGet(weekKey);
-
-    const cachedValue =
-      cachedWeek?.currentWeek ??
-      cachedWeek;
+      await redisGet(
+        weekKey
+      );
 
     currentWeek =
-      validWeek(cachedValue);
+      extractCurrentWeek(
+        cachedWeek
+      );
 
     if (currentWeek) {
-      cached = true;
-      stale = true;
+      weekCached = true;
 
       debug.weekSource =
         "redis";
     }
   }
 
+  const actualSchedules =
+    getActualSchedules(
+      scheduleData
+    );
+
   if (
     !scheduleData ||
     !hasSchedules(
-      scheduleData.schedules
+      actualSchedules
     ) ||
     !currentWeek
   ) {
     return res.status(200).json({
       success: true,
-      cached: false,
+      cached:
+        scheduleCached ||
+        weekCached,
       fallback: true,
-      stale: false,
+      stale:
+        scheduleCached ||
+        weekCached,
       debug: {
         ...debug,
-        source: "fallback"
+        source:
+          scheduleCached ||
+          weekCached
+            ? "redis"
+            : "fallback"
       },
       data: fallbackData(
-        studentGroup
+        studentGroup,
+        currentWeek
       )
     });
   }
 
-  if (!cached) {
+  if (!scheduleCached) {
     await redisSet(
       scheduleKey,
       scheduleData
@@ -345,8 +507,8 @@ export default async function handler(req, res) {
   }
 
   if (
-    weekResult.status === "fulfilled" &&
-    validWeek(weekResult.value)
+    !weekCached &&
+    currentWeek
   ) {
     await redisSet(
       weekKey,
@@ -356,11 +518,20 @@ export default async function handler(req, res) {
     );
   }
 
-  const now = new Date();
+  const cached =
+    scheduleCached ||
+    weekCached;
+
+  const stale =
+    scheduleCached ||
+    weekCached;
+
+  const now =
+    new Date();
 
   const todaySchedules =
     resolveLessonsForDate(
-      scheduleData.schedules,
+      actualSchedules,
       now,
       currentWeek,
       subgroup,
@@ -371,7 +542,7 @@ export default async function handler(req, res) {
 
   const nextLesson =
     getNextLesson(
-      scheduleData.schedules,
+      actualSchedules,
       now,
       null,
       subgroup,
@@ -393,7 +564,7 @@ export default async function handler(req, res) {
     data: {
       studentGroup,
       schedules:
-        scheduleData.schedules,
+        actualSchedules,
       todaySchedules,
       exams:
         Array.isArray(
