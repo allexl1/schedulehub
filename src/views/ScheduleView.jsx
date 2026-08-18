@@ -4,7 +4,7 @@ import React, {
   useRef,
   useState
 } from 'react';
-
+import TeacherDetailsSheet from '../components/schedule/TeacherDetailsSheet';
 import LessonDetailsSheet from '../components/schedule/LessonDetailsSheet';
 import ScheduleToolbar from '../components/schedule/ScheduleToolbar';
 import ScheduleCalendar from '../components/schedule/ScheduleCalendar';
@@ -202,6 +202,11 @@ export default function ScheduleView({
     selectedLesson,
     setSelectedLesson
   ] = useState(null);
+
+const [
+  selectedTeacher,
+  setSelectedTeacher
+] = useState(null);
 
   const [
     activeAction,
