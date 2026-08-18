@@ -974,6 +974,18 @@ const [
   onClose={() =>
     setSelectedLesson(null)
   }
+  onTeacherClick={teacher => {
+    setSelectedTeacher(
+      teacher
+    );
+  }}
+/>
+
+<TeacherDetailsSheet
+  teacher={selectedTeacher}
+  onClose={() =>
+    setSelectedTeacher(null)
+  }
 />
 
       {isGroupSelectorOpen && (
