@@ -491,21 +491,17 @@ export default function ScheduleView({
       );
     };
 
-  const handleToolbarAction =
-    action => {
-      if (
-        action === 'favorites'
-      ) {
-        setIsGroupSelectorOpen(
-          true
-        );
+  const handleToolbarAction = action => {
+  setActiveAction(action);
 
-        return;
-      }
-
-      setActiveAction(
-        action
-      );
+  if (action === 'days') {
+    requestAnimationFrame(() => {
+      scheduleListRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    });
+  };
 
       if (
         action === 'days'
