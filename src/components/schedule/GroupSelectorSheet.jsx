@@ -34,7 +34,8 @@ export default function GroupSelectorSheet({
 }) {
   const favorites =
     readFavorites().filter(
-      group => group !== currentGroup
+      group =>
+        group !== currentGroup
     );
 
   return (
@@ -52,11 +53,11 @@ export default function GroupSelectorSheet({
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-extrabold text-[var(--text-primary)]">
-              Your groups
+              Groups
             </h2>
 
             <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-              Quickly switch timetable
+              Switch your schedule
             </p>
           </div>
 
@@ -71,36 +72,38 @@ export default function GroupSelectorSheet({
         </div>
 
         <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() =>
-              onSelectGroup(
-                currentGroup
-              )
-            }
-            className="flex w-full items-center gap-3 rounded-2xl bg-[var(--surface-glass)] p-3 text-left ring-1 ring-[#2997ff]/30"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2997ff]/10 text-[#2997ff]">
-              <Icon
-                name="user"
-                className="h-5 w-5"
-              />
-            </div>
+          {currentGroup && (
+            <button
+              type="button"
+              onClick={() =>
+                onSelectGroup(
+                  currentGroup
+                )
+              }
+              className="flex w-full items-center gap-3 rounded-2xl bg-[var(--surface-glass)] p-3 text-left ring-1 ring-[#2997ff]/30"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2997ff]/10 text-[#2997ff]">
+                <Icon
+                  name="user"
+                  className="h-5 w-5"
+                />
+              </div>
 
-            <div className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-[var(--text-primary)]">
-                {currentGroup}
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-[var(--text-primary)]">
+                  {currentGroup}
+                </span>
+
+                <span className="mt-0.5 block text-[10px] font-semibold text-[#2997ff]">
+                  Current group
+                </span>
+              </div>
+
+              <span className="text-[#2997ff]">
+                ✓
               </span>
-
-              <span className="mt-0.5 block text-[10px] font-semibold text-[#2997ff]">
-                Your group
-              </span>
-            </div>
-
-            <span className="text-[#2997ff]">
-              ✓
-            </span>
-          </button>
+            </button>
+          )}
 
           {favorites.length > 0 && (
             <div className="pt-2">
@@ -108,37 +111,48 @@ export default function GroupSelectorSheet({
                 Favorites
               </p>
 
-              {favorites.map(group => (
-                <button
-                  key={group}
-                  type="button"
-                  onClick={() =>
-                    onSelectGroup(
-                      group
-                    )
-                  }
-                  className="mb-2 flex w-full items-center gap-3 rounded-2xl bg-[var(--surface-glass)] p-3 text-left active:scale-[0.99]"
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-glass)] text-[#2997ff]">
-                    ★
-                  </div>
+              {favorites.map(
+                favoriteGroup => (
+                  <button
+                    key={
+                      favoriteGroup
+                    }
+                    type="button"
+                    onClick={() =>
+                      onSelectGroup(
+                        favoriteGroup
+                      )
+                    }
+                    className="mb-2 flex w-full items-center gap-3 rounded-2xl bg-[var(--surface-glass)] p-3 text-left active:scale-[0.99]"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2997ff]/10 text-[#2997ff]">
+                      <Icon
+                        name="star"
+                        className="h-5 w-5"
+                      />
+                    </div>
 
-                  <span className="min-w-0 flex-1 truncate text-sm font-bold text-[var(--text-primary)]">
-                    {group}
-                  </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-[var(--text-primary)]">
+                      {
+                        favoriteGroup
+                      }
+                    </span>
 
-                  <Icon
-                    name="chevronRight"
-                    className="h-4 w-4 shrink-0 text-[var(--text-secondary)]"
-                  />
-                </button>
-              ))}
+                    <Icon
+                      name="chevronRight"
+                      className="h-4 w-4 shrink-0 text-[var(--text-secondary)]"
+                    />
+                  </button>
+                )
+              )}
             </div>
           )}
 
           <button
             type="button"
-            onClick={onOpenBrowser}
+            onClick={
+              onOpenBrowser
+            }
             className="flex w-full items-center gap-3 rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass)] p-3 text-left active:scale-[0.99]"
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2997ff]/10 text-[#2997ff]">
@@ -154,7 +168,7 @@ export default function GroupSelectorSheet({
               </span>
 
               <span className="mt-0.5 block text-[10px] text-[var(--text-secondary)]">
-                Search real BSUIR groups
+                Search BSUIR groups
               </span>
             </div>
 
