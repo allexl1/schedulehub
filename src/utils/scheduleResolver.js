@@ -598,21 +598,25 @@ function getScheduleEntriesForDate(
     return [];
   }
 
-  const dayName =
-    getDayName(date);
+  const dayName = getDayName(date);
 
-  if (!dayName) {
-    return [];
-  }
+const SCHEDULE_DAY_NAMES = {
+  Sunday: 'Воскресенье',
+  Monday: 'Понедельник',
+  Tuesday: 'Вторник',
+  Wednesday: 'Среда',
+  Thursday: 'Четверг',
+  Friday: 'Пятница',
+  Saturday: 'Суббота'
+};
 
-  const candidates = [
-    dayName,
-    dayName.slice(0, 3),
-    dayName.toLowerCase(),
-    dayName
-      .toLowerCase()
-      .slice(0, 3)
-  ];
+const candidates = [
+  SCHEDULE_DAY_NAMES[dayName],
+  dayName,
+  dayName.slice(0, 3),
+  dayName.toLowerCase(),
+  dayName.toLowerCase().slice(0, 3)
+].filter(Boolean);
 
   for (
     const key of candidates
@@ -1026,64 +1030,103 @@ export function resolveLessonsForWeekday(
 }
 
 export function getNextLesson(
-  lessons,
-  now = new Date()
+  schedules,
+  now = new Date(),
+  options = {}
 ) {
-  const reference =
-    toDate(now);
+  const reference = toDate(now);
 
   if (!reference) {
     return null;
   }
 
-  const sorted =
-    Array.isArray(lessons)
-      ? [...lessons].sort(
-          (a, b) => {
-            const aTime =
-              a.startDateTime instanceof Date
-                ? a.startDateTime.getTime()
-                : timeToMinutes(
-                    a.time
-                  );
+  const startDate =
+    options.startDate ||
+    options.scheduleStartDate ||
+    null;
 
-            const bTime =
-              b.startDateTime instanceof Date
-                ? b.startDateTime.getTime()
-                : timeToMinutes(
-                    b.time
-                  );
+  const endDate =
+    options.endDate ||
+    options.scheduleEndDate ||
+    null;
 
-            return (
-              aTime - bTime
-            );
-          }
-        )
-      : [];
+  const subgroup =
+    options.subgroup ?? 'all';
 
-  return (
-    sorted.find(lesson => {
-      if (
-        lesson.startDateTime instanceof Date
-      ) {
-        return (
-          lesson.startDateTime >
-          reference
-        );
-      }
+  const currentWeek =
+    getAcademicWeekForDate(
+      reference,
+      reference
+    );
 
-      return (
-        timeToMinutes(
-          lesson.time
-        ) >
-        (
-          reference.getHours() *
-            60 +
-          reference.getMinutes()
-        )
+  if (!currentWeek) {
+    return null;
+  }
+
+  const today = startOfDay(reference);
+
+  if (!today) {
+    return null;
+  }
+
+  const searchDays = 370;
+
+  for (
+    let offset = 0;
+    offset < searchDays;
+    offset += 1
+  ) {
+    const date = addDays(
+      today,
+      offset
+    );
+
+    if (!date) {
+      continue;
+    }
+
+    if (
+      endDate &&
+      startOfDay(date) > startOfDay(endDate)
+    ) {
+      break;
+    }
+
+    const lessons =
+      resolveLessonsForDate(
+        schedules,
+        date,
+        currentWeek,
+        subgroup,
+        {
+          referenceDate: reference,
+          startDate,
+          endDate
+        }
       );
-    }) || null
-  );
+
+    for (const lesson of lessons) {
+      const startDateTime =
+        lesson.startDateTime instanceof Date
+          ? lesson.startDateTime
+          : makeDateTime(
+              date,
+              lesson.startLessonTime
+            );
+
+      if (
+        startDateTime &&
+        startDateTime > reference
+      ) {
+        return {
+          ...lesson,
+          startDateTime
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 export function resolveScheduleForDate(
