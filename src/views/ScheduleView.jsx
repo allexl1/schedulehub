@@ -27,6 +27,9 @@ import {
 const PERSONAL_EVENTS_KEY =
   'sh_personal_events';
 
+const FAVORITES_KEY =
+  'sh_schedule_favorite_groups';
+
 function startOfDay(date) {
   const result = new Date(date);
 
@@ -150,6 +153,37 @@ function savePersonalEvents(events) {
       error
     );
   }
+}
+
+function readFavoriteGroups() {
+  try {
+    const saved =
+      localStorage.getItem(
+        FAVORITES_KEY
+      );
+
+    if (!saved) {
+      return [];
+    }
+
+    const parsed =
+      JSON.parse(saved);
+
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFavoriteGroups(
+  groups
+) {
+  localStorage.setItem(
+    FAVORITES_KEY,
+    JSON.stringify(groups)
+  );
 }
 
 function formatExamDate(value) {
@@ -278,6 +312,13 @@ export default function ScheduleView({
   ] = useState(
     readPersonalEvents
   );
+  
+  const [
+  favoriteGroups,
+  setFavoriteGroups
+] = useState(
+  readFavoriteGroups
+);
 
   const [
     loadedDays,
@@ -530,6 +571,41 @@ export default function ScheduleView({
       personalEvents,
       now
     ]);
+    
+    const isCurrentGroupFavorite =
+  Boolean(
+    group &&
+    favoriteGroups.includes(
+      group
+    )
+  );
+
+const handleToggleFavorite =
+  () => {
+    if (!group) {
+      return;
+    }
+
+    const updated =
+      isCurrentGroupFavorite
+        ? favoriteGroups.filter(
+            favoriteGroup =>
+              favoriteGroup !==
+              group
+          )
+        : [
+            ...favoriteGroups,
+            group
+          ];
+
+    setFavoriteGroups(
+      updated
+    );
+
+    saveFavoriteGroups(
+      updated
+    );
+  };
 
   const handleToolbarAction =
     action => {
@@ -955,16 +1031,20 @@ export default function ScheduleView({
           </button>
         </div>
 
-        <ScheduleToolbar
-          activeAction={
-            activeAction
-          }
-          onAction={
-            handleToolbarAction
-          }
-          isFavorite={false}
-          onToggleFavorite={() => {}}
-        />
+      <ScheduleToolbar
+  activeAction={
+    activeAction
+  }
+  onAction={
+    handleToolbarAction
+  }
+  isFavorite={
+    isCurrentGroupFavorite
+  }
+  onToggleFavorite={
+    handleToggleFavorite
+  }
+/>
 
         {activeAction ===
           'days' &&
@@ -1043,35 +1123,44 @@ export default function ScheduleView({
       )}
 
       {isGroupSelectorOpen && (
-        <GroupSelectorSheet
-          group={
-            group
-          }
-          onSelect={
-            handleGroupChange
-          }
-          onClose={() =>
-            setIsGroupSelectorOpen(
-              false
-            )
-          }
-        />
+      <GroupSelectorSheet
+  currentGroup={
+    group
+  }
+  onSelectGroup={
+    handleGroupChange
+  }
+  onOpenBrowser={() => {
+    setIsGroupSelectorOpen(
+      false
+    );
+
+    setIsGroupBrowserOpen(
+      true
+    );
+  }}
+  onClose={() =>
+    setIsGroupSelectorOpen(
+      false
+    )
+  }
+/>
       )}
 
       {isGroupBrowserOpen && (
-        <GroupBrowser
-          selectedGroup={
-            group
-          }
-          onSelect={
-            handleGroupChange
-          }
-          onClose={() =>
-            setIsGroupBrowserOpen(
-              false
-            )
-          }
-        />
+<GroupBrowser
+  currentGroup={
+    group
+  }
+  onSelectGroup={
+    handleGroupChange
+  }
+  onClose={() =>
+    setIsGroupBrowserOpen(
+      false
+    )
+  }
+/>
       )}
     </>
   );
