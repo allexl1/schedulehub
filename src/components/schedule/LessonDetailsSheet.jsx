@@ -368,11 +368,10 @@ export default function LessonDetailsSheet({
   ] = useState(0);
 
   const dragState =
-    useRef({
-      active: false,
-      startY: 0,
-      startOffset: 0
-    });
+  useRef({
+    active: false,
+    startY: 0
+  });
 
   const sheetRef =
     useRef(null);
@@ -487,10 +486,9 @@ export default function LessonDetailsSheet({
       }
 
       dragState.current = {
-        active: true,
-        startY: event.clientY,
-        startOffset: 0
-      };
+  active: true,
+  startY: event.clientY
+};
 
       event.currentTarget.setPointerCapture(
         event.pointerId
@@ -504,10 +502,6 @@ export default function LessonDetailsSheet({
       ) {
         return;
       }
-
-      const delta =
-        event.clientY -
-        dragState.current.startY;
 
       setDragOffset(delta);
     };
