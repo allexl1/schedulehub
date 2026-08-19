@@ -5,18 +5,6 @@ import {
   parseTimeRange
 } from '../../utils/time';
 
-function getEmployeeName(employee) {
-  return employee?.fio || '';
-}
-
-function getLessonAccent(item) {
-  return (
-    item?.color ||
-    item?.lessonColor ||
-    'var(--accent-primary, #2997ff)'
-  );
-}
-
 function getTeacher(item) {
   if (item?.teacher) {
     return item.teacher;
@@ -27,7 +15,7 @@ function getTeacher(item) {
   }
 
   return item.employees
-    .map(getEmployeeName)
+    .map(employee => employee?.fio || '')
     .filter(Boolean)
     .join(', ');
 }
@@ -37,7 +25,41 @@ function getTeacherPhoto(item) {
     return '';
   }
 
-  return item.employees[0]?.photoLink || '';
+  return (
+    item.employees[0]?.photoLink ||
+    ''
+  );
+}
+
+function getLessonAccent(item) {
+  return (
+    item?.color ||
+    item?.lessonColor ||
+    'var(--accent-primary, #2997ff)'
+  );
+}
+
+function getLessonTime(item) {
+  if (!item?.time) {
+    return null;
+  }
+
+  const range =
+    parseTimeRange(item.time);
+
+  if (
+    !range?.startTime &&
+    !range?.endTime
+  ) {
+    return null;
+  }
+
+  return {
+    start:
+      range.startTime || '',
+    end:
+      range.endTime || ''
+  };
 }
 
 export default function ScheduleLessonCard({
@@ -57,25 +79,16 @@ export default function ScheduleLessonCard({
   const next =
     item.status === 'next';
 
-  const minutesLeft = current
-    ? getMinutesUntilEnd(
-        item.time,
-        now
-      )
-    : null;
+  const time =
+    getLessonTime(item);
 
-  const range =
-    parseTimeRange(item.time);
-
-  const start =
-    range?.startTime ||
-    item.startLessonTime ||
-    '09:00';
-
-  const end =
-    range?.endTime ||
-    item.endLessonTime ||
-    '10:20';
+  const minutesLeft = current &&
+    item.time
+      ? getMinutesUntilEnd(
+          item.time,
+          now
+        )
+      : null;
 
   const teacher =
     getTeacher(item);
@@ -127,21 +140,31 @@ export default function ScheduleLessonCard({
       }`}
     >
       <div className="w-14 shrink-0 pt-0.5 text-right font-mono">
-        <span
-          className={`block text-xs font-bold ${
-            current
-              ? 'text-[#30d158]'
-              : next
-                ? 'text-[#2997ff]'
-                : 'text-[var(--text-primary)]'
-          }`}
-        >
-          {start}
-        </span>
+        {time ? (
+          <>
+            <span
+              className={`block text-xs font-bold ${
+                current
+                  ? 'text-[#30d158]'
+                  : next
+                    ? 'text-[#2997ff]'
+                    : 'text-[var(--text-primary)]'
+              }`}
+            >
+              {time.start}
+            </span>
 
-        <span className="mt-0.5 block text-[10px] text-[var(--text-secondary)]">
-          {end}
-        </span>
+            {time.end && (
+              <span className="mt-0.5 block text-[10px] text-[var(--text-secondary)]">
+                {time.end}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-[10px] text-[var(--text-secondary)]">
+            —
+          </span>
+        )}
       </div>
 
       <button
@@ -192,26 +215,30 @@ export default function ScheduleLessonCard({
                 )}
             </div>
 
-            <span className="shrink-0 rounded-md bg-white/5 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-              {item.type ||
-                'Lecture'}
-            </span>
+            {item.type && (
+              <span className="shrink-0 rounded-md bg-white/5 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                {item.type}
+              </span>
+            )}
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--text-secondary)]">
-            <span>
-              Room{' '}
-              {item.room ||
-                '-'}
-            </span>
+            {item.room && (
+              <span>
+                Room{' '}
+                {item.room}
+              </span>
+            )}
 
             {item.numSubgroup &&
               item.numSubgroup !==
                 'all' && (
                 <>
-                  <span aria-hidden="true">
-                    •
-                  </span>
+                  {item.room && (
+                    <span aria-hidden="true">
+                      •
+                    </span>
+                  )}
 
                   <span>
                     Subgroup{' '}
