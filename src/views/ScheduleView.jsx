@@ -31,7 +31,8 @@ const FAVORITES_KEY =
   'sh_schedule_favorite_groups';
 
 function startOfDay(date) {
-  const result = new Date(date);
+  const result =
+    new Date(date);
 
   result.setHours(
     0,
@@ -43,21 +44,32 @@ function startOfDay(date) {
   return result;
 }
 
-function addDays(date, amount) {
-  const result = new Date(date);
+function addDays(
+  date,
+  amount
+) {
+  const result =
+    new Date(date);
 
   result.setDate(
-    result.getDate() + amount
+    result.getDate() +
+      amount
   );
 
   return result;
 }
 
-function sameDate(a, b) {
+function sameDate(
+  first,
+  second
+) {
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    first.getFullYear() ===
+      second.getFullYear() &&
+    first.getMonth() ===
+      second.getMonth() &&
+    first.getDate() ===
+      second.getDate()
   );
 }
 
@@ -85,17 +97,13 @@ function getRelativeLabel(
   date,
   now
 ) {
-  if (sameDate(date, now)) {
-    return 'Today';
-  }
-
   if (
     sameDate(
       date,
-      addDays(now, -1)
+      now
     )
   ) {
-    return 'Yesterday';
+    return 'Today';
   }
 
   if (
@@ -107,10 +115,21 @@ function getRelativeLabel(
     return 'Tomorrow';
   }
 
+  if (
+    sameDate(
+      date,
+      addDays(now, -1)
+    )
+  ) {
+    return 'Yesterday';
+  }
+
   return '';
 }
 
-function getPersonalDay(date) {
+function getPersonalDay(
+  date
+) {
   return date.toLocaleDateString(
     'en-US',
     {
@@ -141,33 +160,32 @@ function readPersonalEvents() {
   }
 }
 
-function savePersonalEvents(events) {
+function savePersonalEvents(
+  events
+) {
   try {
     localStorage.setItem(
       PERSONAL_EVENTS_KEY,
       JSON.stringify(events)
     );
-  } catch (error) {
-    console.error(
-      'Failed to save personal events:',
-      error
-    );
+  } catch {
+    return;
   }
 }
 
 function readFavoriteGroups() {
   try {
-    const saved =
+    const value =
       localStorage.getItem(
         FAVORITES_KEY
       );
 
-    if (!saved) {
+    if (!value) {
       return [];
     }
 
     const parsed =
-      JSON.parse(saved);
+      JSON.parse(value);
 
     return Array.isArray(parsed)
       ? parsed
@@ -186,19 +204,22 @@ function saveFavoriteGroups(
   );
 }
 
-function formatExamDate(value) {
+function formatExamDate(
+  value
+) {
   if (!value) {
     return '';
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
   if (
     Number.isNaN(
       date.getTime()
     )
   ) {
-    return value;
+    return String(value);
   }
 
   return date.toLocaleDateString(
@@ -248,6 +269,132 @@ function getLessonStatus(
   return 'upcoming';
 }
 
+function getCompactSections(
+  loadedDays
+) {
+  const sections = new Map();
+
+  loadedDays.forEach(
+    section => {
+      const weekday =
+        section.date.getDay() ===
+        0
+          ? 7
+          : section.date.getDay();
+
+      if (
+        !sections.has(
+          weekday
+        )
+      ) {
+        sections.set(
+          weekday,
+          {
+            weekday,
+            date:
+              section.date,
+            weekNumber:
+              section.weekNumber,
+            lessons:
+              section.lessons
+          }
+        );
+      }
+    }
+  );
+
+  return Array.from(
+    sections.values()
+  ).sort(
+    (a, b) =>
+      a.weekday -
+      b.weekday
+  );
+}
+
+function SectionHeader({
+  date,
+  weekNumber,
+  now,
+  compact = false
+}) {
+  const relative =
+    getRelativeLabel(
+      date,
+      now
+    );
+
+  const isToday =
+    sameDate(
+      date,
+      now
+    );
+
+  if (compact) {
+    return (
+      <div className="mb-3 px-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-bold text-[var(--text-primary)]">
+            {getDayName(date)}
+          </h2>
+
+          {isToday && (
+            <span className="rounded-full bg-[#2997ff]/10 px-2 py-0.5 text-[9px] font-bold text-[#2997ff]">
+              Today
+            </span>
+          )}
+        </div>
+
+        <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+          Week {weekNumber}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 px-1">
+      <div className="flex items-center gap-2">
+        <h2
+          className={`text-base font-bold ${
+            isToday
+              ? 'text-[#2997ff]'
+              : 'text-[var(--text-primary)]'
+          }`}
+        >
+          {formatDate(date)}
+        </h2>
+
+        {relative && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+              isToday
+                ? 'bg-[#2997ff]/10 text-[#2997ff]'
+                : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
+            }`}
+          >
+            {relative}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--text-secondary)]">
+        <span>
+          {getDayName(date)}
+        </span>
+
+        <span aria-hidden="true">
+          •
+        </span>
+
+        <span>
+          Week {weekNumber}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function ScheduleView({
   scheduleData,
   group,
@@ -256,10 +403,12 @@ export default function ScheduleView({
   onLessonClick,
   onGroupChange
 }) {
-  const [now, setNow] =
-    useState(
-      () => new Date()
-    );
+  const [
+    now,
+    setNow
+  ] = useState(
+    () => new Date()
+  );
 
   const [
     selectedDate,
@@ -284,7 +433,9 @@ export default function ScheduleView({
   const [
     activeAction,
     setActiveAction
-  ] = useState('days');
+  ] = useState(
+    'continuous'
+  );
 
   const [
     isGroupSelectorOpen,
@@ -312,13 +463,13 @@ export default function ScheduleView({
   ] = useState(
     readPersonalEvents
   );
-  
+
   const [
-  favoriteGroups,
-  setFavoriteGroups
-] = useState(
-  readFavoriteGroups
-);
+    favoriteGroups,
+    setFavoriteGroups
+  ] = useState(
+    readFavoriteGroups
+  );
 
   const [
     loadedDays,
@@ -380,20 +531,12 @@ export default function ScheduleView({
   const scheduleReady =
     Boolean(
       scheduleStartDate &&
-      scheduleEndDate &&
-      Object.keys(
-        schedules
-      ).length > 0
+        scheduleEndDate &&
+        Object.keys(
+          schedules
+        ).length > 0
     );
 
-  /*
-   * Initial continuous schedule.
-   *
-   * This follows the Swift behavior:
-   * start around yesterday and resolve
-   * actual schedule dates inside the
-   * API-provided schedule boundaries.
-   */
   useEffect(() => {
     if (!scheduleReady) {
       setLoadedDays([]);
@@ -421,58 +564,59 @@ export default function ScheduleView({
     subgroup
   ]);
 
-  const loadMoreDays = () => {
-    if (
-      isLoadingMore ||
-      loadedDays.length === 0
-    ) {
-      return;
-    }
+  const loadMoreDays =
+    () => {
+      if (
+        isLoadingMore ||
+        loadedDays.length ===
+          0
+      ) {
+        return;
+      }
 
-    const lastDay =
-      loadedDays[
-        loadedDays.length - 1
-      ];
+      const lastDay =
+        loadedDays[
+          loadedDays.length -
+            1
+        ];
 
-    if (
-      !lastDay?.date ||
-      !scheduleEndDate
-    ) {
-      return;
-    }
+      if (
+        !lastDay?.date ||
+        !scheduleEndDate
+      ) {
+        return;
+      }
 
-    setIsLoadingMore(true);
+      setIsLoadingMore(true);
 
-    const moreDays =
-      getMoreContinuousSchedule({
-        schedules,
-        startDate:
-          scheduleStartDate,
-        endDate:
-          scheduleEndDate,
-        lastDate:
-          lastDay.date,
-        now,
-        subgroup,
-        limit: 10
-      });
+      const moreDays =
+        getMoreContinuousSchedule({
+          schedules,
+          startDate:
+            scheduleStartDate,
+          endDate:
+            scheduleEndDate,
+          lastDate:
+            lastDay.date,
+          now,
+          subgroup,
+          limit: 10
+        });
 
-    if (moreDays.length > 0) {
-      setLoadedDays(
-        current => [
-          ...current,
-          ...moreDays
-        ]
-      );
-    }
+      if (
+        moreDays.length > 0
+      ) {
+        setLoadedDays(
+          current => [
+            ...current,
+            ...moreDays
+          ]
+        );
+      }
 
-    setIsLoadingMore(false);
-  };
+      setIsLoadingMore(false);
+    };
 
-  /*
-   * Automatically request the next batch
-   * when the user reaches the bottom.
-   */
   useEffect(() => {
     const element =
       loadMoreRef.current;
@@ -485,7 +629,8 @@ export default function ScheduleView({
       new IntersectionObserver(
         entries => {
           if (
-            entries[0]?.isIntersecting
+            entries[0]
+              ?.isIntersecting
           ) {
             loadMoreDays();
           }
@@ -509,110 +654,124 @@ export default function ScheduleView({
   ]);
 
   const daySections =
-    useMemo(() => {
-      return loadedDays.map(
-        section => {
-          const personal =
-            personalEvents.filter(
-              event =>
-                event?.day ===
-                getPersonalDay(
-                  section.date
-                )
-            );
-
-          const lessonItems =
-            section.lessons.map(
-              lesson => ({
-                ...lesson,
-                status:
-                  getLessonStatus(
-                    lesson,
-                    section.date,
-                    now
+    useMemo(
+      () =>
+        loadedDays.map(
+          section => {
+            const personal =
+              personalEvents.filter(
+                event =>
+                  event?.day ===
+                  getPersonalDay(
+                    section.date
                   )
-              })
-            );
+              );
 
-          const items = [
-            ...lessonItems,
-            ...personal.map(
-              event => ({
-                ...event,
-                status:
-                  sameDate(
-                    section.date,
-                    now
+            const lessons =
+              section.lessons.map(
+                lesson => ({
+                  ...lesson,
+                  status:
+                    getLessonStatus(
+                      lesson,
+                      section.date,
+                      now
+                    )
+                })
+              );
+
+            const items = [
+              ...lessons,
+              ...personal.map(
+                event => ({
+                  ...event,
+                  status:
+                    sameDate(
+                      section.date,
+                      now
+                    )
+                      ? 'upcoming'
+                      : section.date <
+                          now
+                        ? 'past'
+                        : 'upcoming'
+                })
+              ].sort(
+                (a, b) =>
+                  parseStartTimeInMinutes(
+                    a.time
+                  ) -
+                  parseStartTimeInMinutes(
+                    b.time
                   )
-                    ? 'upcoming'
-                    : section.date < now
-                      ? 'past'
-                      : 'upcoming'
-              })
+              );
+
+            return {
+              ...section,
+              items
+            };
+          }
+        ),
+      [
+        loadedDays,
+        personalEvents,
+        now
+      ]
+    );
+
+  const compactSections =
+    useMemo(
+      () =>
+        getCompactSections(
+          daySections
+        ),
+      [daySections]
+    );
+
+  const isCurrentGroupFavorite =
+    Boolean(
+      group &&
+        favoriteGroups.includes(
+          group
+        )
+    );
+
+  const handleToggleFavorite =
+    () => {
+      if (!group) {
+        return;
+      }
+
+      const updated =
+        isCurrentGroupFavorite
+          ? favoriteGroups.filter(
+              favoriteGroup =>
+                favoriteGroup !==
+                group
             )
-          ].sort(
-            (a, b) =>
-              parseStartTimeInMinutes(
-                a.time
-              ) -
-              parseStartTimeInMinutes(
-                b.time
-              )
-          );
-
-          return {
-            ...section,
-            items
-          };
-        }
-      );
-    }, [
-      loadedDays,
-      personalEvents,
-      now
-    ]);
-    
-    const isCurrentGroupFavorite =
-  Boolean(
-    group &&
-    favoriteGroups.includes(
-      group
-    )
-  );
-
-const handleToggleFavorite =
-  () => {
-    if (!group) {
-      return;
-    }
-
-    const updated =
-      isCurrentGroupFavorite
-        ? favoriteGroups.filter(
-            favoriteGroup =>
-              favoriteGroup !==
+          : [
+              ...favoriteGroups,
               group
-          )
-        : [
-            ...favoriteGroups,
-            group
-          ];
+            ];
 
-    setFavoriteGroups(
-      updated
-    );
+      setFavoriteGroups(
+        updated
+      );
 
-    saveFavoriteGroups(
-      updated
-    );
-  };
+      saveFavoriteGroups(
+        updated
+      );
+    };
 
   const handleToolbarAction =
     action => {
-      setActiveAction(action);
+      setActiveAction(
+        action
+      );
 
       if (
-        action === 'days'
+        action ===
+        'continuous'
       ) {
         requestAnimationFrame(
           () => {
@@ -680,27 +839,6 @@ const handleToggleFavorite =
       );
     };
 
-  const openCreateEvent =
-    () => {
-      setEditingEvent(null);
-      setIsModalOpen(true);
-    };
-
-  const openEditEvent =
-    event => {
-      setEditingEvent(
-        event
-      );
-
-      setIsModalOpen(true);
-    };
-
-  const closeEventModal =
-    () => {
-      setIsModalOpen(false);
-      setEditingEvent(null);
-    };
-
   const handleSaveEvent =
     event => {
       const exists =
@@ -732,7 +870,11 @@ const handleToggleFavorite =
         updated
       );
 
-      closeEventModal();
+      setIsModalOpen(
+        false
+      );
+
+      setEditingEvent(null);
     };
 
   const handleDeleteEvent =
@@ -753,139 +895,135 @@ const handleToggleFavorite =
       );
     };
 
-  const renderContinuous =
-    () => (
+  const openCreateEvent =
+    () => {
+      setEditingEvent(null);
+      setIsModalOpen(true);
+    };
+
+  const openEditEvent =
+    event => {
+      setEditingEvent(
+        event
+      );
+
+      setIsModalOpen(true);
+    };
+
+  const renderDaySections =
+    (
+      sections,
+      compact = false
+    ) => (
       <div
-        ref={scheduleListRef}
-        className="space-y-6"
+        ref={
+          compact
+            ? undefined
+            : scheduleListRef
+        }
+        className="space-y-7"
       >
-        {daySections.map(
-          section => {
-            const isToday =
-              sameDate(
-                section.date,
-                now
-              );
-
-            const relative =
-              getRelativeLabel(
-                section.date,
-                now
-              );
-
-            return (
-              <section
-                key={
-                  section.dateKey
+        {sections.map(
+          section => (
+            <section
+              key={
+                compact
+                  ? `compact-${section.weekday}`
+                  : section.dateKey
+              }
+              className="scroll-mt-4"
+            >
+              <SectionHeader
+                date={
+                  section.date
                 }
-                className="scroll-mt-4"
-              >
-                <div className="mb-3 px-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-[var(--text-primary)]">
-                      {formatDate(
-                        section.date
-                      )}
-                    </h2>
+                weekNumber={
+                  section.weekNumber
+                }
+                now={now}
+                compact={
+                  compact
+                }
+              />
 
-                    {relative && (
-                      <span
-                        className={`text-[10px] font-semibold ${
-                          isToday
-                            ? 'text-[#2997ff]'
-                            : 'text-[var(--text-secondary)]'
-                        }`}
-                      >
-                        {
-                          relative
-                        }
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <p className="text-[11px] text-[var(--text-secondary)]">
-                      {getDayName(
-                        section.date
-                      )}
-                    </p>
-
-                    <span className="text-[10px] text-[var(--text-secondary)]">
-                      Week{' '}
-                      {
-                        section.weekNumber
+              <div className="overflow-hidden rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass)]">
+                {section.items.map(
+                  (
+                    item,
+                    index
+                  ) => (
+                    <ScheduleLessonCard
+                      key={
+                        item.id ||
+                        `${section.dateKey || section.weekday}-${index}`
                       }
-                    </span>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-2xl bg-[var(--surface-glass)]">
-                  {section.items.map(
-                    (
-                      item,
-                      index
-                    ) => (
-                      <ScheduleLessonCard
-                        key={
-                          item.id ||
-                          `${section.dateKey}-${index}`
-                        }
-                        item={
-                          item
-                        }
-                        now={now}
-                        index={
-                          index
-                        }
-                        onLessonClick={
-                          handleLessonClick
-                        }
-                        onEditPersonalEvent={
-                          openEditEvent
-                        }
-                        onDeletePersonalEvent={
-                          handleDeleteEvent
-                        }
-                      />
-                    )
-                  )}
-                </div>
-              </section>
-            );
-          }
+                      item={item}
+                      now={now}
+                      index={index}
+                      onLessonClick={
+                        handleLessonClick
+                      }
+                      onEditPersonalEvent={
+                        openEditEvent
+                      }
+                      onDeletePersonalEvent={
+                        handleDeleteEvent
+                      }
+                    />
+                  )
+                )}
+              </div>
+            </section>
+          )
         )}
 
         {!loading &&
           scheduleReady &&
-          daySections.length ===
+          sections.length ===
             0 && (
-            <div className="rounded-2xl bg-[var(--surface-glass)] px-4 py-8 text-center">
+            <div className="rounded-2xl bg-[var(--surface-glass)] px-4 py-10 text-center">
               <p className="text-sm font-semibold text-[var(--text-primary)]">
-                No classes found
+                No classes
               </p>
 
               <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                There are no classes in
-                the current schedule range.
+                No classes are available for this schedule.
               </p>
             </div>
           )}
 
-        {scheduleReady &&
-          daySections.length > 0 && (
-          <div
-            ref={loadMoreRef}
-            className="flex min-h-12 items-center justify-center"
-          >
-            {isLoadingMore && (
-              <span className="text-xs text-[var(--text-secondary)]">
-                Loading more...
-              </span>
-            )}
-          </div>
-        )}
+        {!compact &&
+          scheduleReady &&
+          sections.length >
+            0 && (
+            <div
+              ref={
+                loadMoreRef
+              }
+              className="flex min-h-12 items-center justify-center"
+            >
+              {isLoadingMore && (
+                <span className="text-xs text-[var(--text-secondary)]">
+                  Loading more...
+                </span>
+              )}
+            </div>
+          )}
       </div>
     );
+
+  const renderContinuous =
+    () =>
+      renderDaySections(
+        daySections
+      );
+
+  const renderCompact =
+    () =>
+      renderDaySections(
+        compactSections,
+        true
+      );
 
   const renderCalendar =
     () => (
@@ -905,15 +1043,18 @@ const handleToggleFavorite =
         subgroup={
           subgroup
         }
-        now={now}
+        referenceDate={
+          now
+        }
       />
     );
 
   const renderExams =
     () => (
       <div className="space-y-3">
-        {exams.length === 0 ? (
-          <div className="rounded-2xl bg-[var(--surface-glass)] px-4 py-8 text-center">
+        {exams.length ===
+        0 ? (
+          <div className="rounded-2xl bg-[var(--surface-glass)] px-4 py-10 text-center">
             <p className="text-sm font-semibold text-[var(--text-primary)]">
               No exams
             </p>
@@ -926,7 +1067,7 @@ const handleToggleFavorite =
                   exam.id ||
                   `${exam.date}-${index}`
                 }
-                className="rounded-2xl bg-[var(--surface-glass)] p-4"
+                className="rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass)] p-4"
               >
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
                   {exam.subject ||
@@ -967,88 +1108,94 @@ const handleToggleFavorite =
 
   return (
     <>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-[var(--text-secondary)]">
-              Schedule
-            </p>
+      <div className="space-y-5">
+        <header className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[var(--text-secondary)]">
+                Schedule
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setIsGroupSelectorOpen(
+                    true
+                  )
+                }
+                className="mt-1 flex max-w-full items-center gap-2 text-left"
+              >
+                <span className="truncate text-xl font-extrabold text-[var(--text-primary)]">
+                  {group ||
+                    'All groups'}
+                </span>
+
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-4 w-4 shrink-0 text-[var(--text-secondary)]"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+            </div>
 
             <button
               type="button"
               onClick={() =>
-                setIsGroupSelectorOpen(
+                setIsGroupBrowserOpen(
                   true
                 )
               }
-              className="mt-1 flex items-center gap-1.5 text-left"
+              aria-label="Browse groups"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-glass)] text-[var(--text-secondary)] transition-transform active:scale-95"
             >
-              <span className="truncate text-lg font-extrabold text-[var(--text-primary)]">
-                {group ||
-                  'All groups'}
-              </span>
-
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4 text-[var(--text-secondary)]"
+                strokeWidth="1.8"
+                className="h-5 w-5"
                 aria-hidden="true"
               >
-                <path d="m6 9 6 6 6-6" />
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle
+                  cx="9"
+                  cy="7"
+                  r="4"
+                />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              setIsGroupBrowserOpen(
-                true
-              )
+          <ScheduleToolbar
+            activeAction={
+              activeAction
             }
-            aria-label="Browse groups"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-glass)] text-[var(--text-secondary)]"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              className="h-5 w-5"
-              aria-hidden="true"
-            >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle
-                cx="9"
-                cy="7"
-                r="4"
-              />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </button>
-        </div>
-
-      <ScheduleToolbar
-  activeAction={
-    activeAction
-  }
-  onAction={
-    handleToolbarAction
-  }
-  isFavorite={
-    isCurrentGroupFavorite
-  }
-  onToggleFavorite={
-    handleToggleFavorite
-  }
-/>
+            onAction={
+              handleToolbarAction
+            }
+            isFavorite={
+              isCurrentGroupFavorite
+            }
+            onToggleFavorite={
+              handleToggleFavorite
+            }
+          />
+        </header>
 
         {activeAction ===
-          'days' &&
+          'continuous' &&
           renderContinuous()}
+
+        {activeAction ===
+          'compact' &&
+          renderCompact()}
 
         {activeAction ===
           'calendar' &&
@@ -1060,14 +1207,14 @@ const handleToggleFavorite =
       </div>
 
       {activeAction ===
-        'days' && (
+        'continuous' && (
         <button
           type="button"
           onClick={
             openCreateEvent
           }
           aria-label="Add personal event"
-          className="fixed bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#2997ff] text-2xl font-light text-white shadow-lg"
+          className="fixed bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#2997ff] text-2xl font-light text-white shadow-lg transition-transform active:scale-95"
         >
           +
         </button>
@@ -1116,51 +1263,56 @@ const handleToggleFavorite =
           onDelete={
             handleDeleteEvent
           }
-          onClose={
-            closeEventModal
-          }
+          onClose={() => {
+            setIsModalOpen(
+              false
+            );
+            setEditingEvent(
+              null
+            );
+          }}
         />
       )}
 
       {isGroupSelectorOpen && (
-      <GroupSelectorSheet
-  currentGroup={
-    group
-  }
-  onSelectGroup={
-    handleGroupChange
-  }
-  onOpenBrowser={() => {
-    setIsGroupSelectorOpen(
-      false
-    );
+        <GroupSelectorSheet
+          currentGroup={
+            group
+          }
+          onSelectGroup={
+            handleGroupChange
+          }
+          onOpenBrowser={() => {
+            setIsGroupSelectorOpen(
+              false
+            );
 
-    setIsGroupBrowserOpen(
-      true
-    );
-  }}
-  onClose={() =>
-    setIsGroupSelectorOpen(
-      false
-    )
-  }
-/>
+            setIsGroupBrowserOpen(
+              true
+            );
+          }}
+          onClose={() =>
+            setIsGroupSelectorOpen(
+              false
+            )
+          }
+        />
       )}
 
       {isGroupBrowserOpen && (
-<GroupBrowser
-  currentGroup={
-    group
-  }
-  onSelectGroup={
-    handleGroupChange
-  }
-  onClose={() =>
-    setIsGroupBrowserOpen(
-      false
-    )
-  }
-/>
+        <GroupBrowser
+          currentGroup={
+            group
+          }
+          onSelectGroup={
+            handleGroupChange
+          }
+          onClose={() =>
+            setIsGroupBrowserOpen(
+              false
+            )
+          }
+        />
       )}
     </>
   );
