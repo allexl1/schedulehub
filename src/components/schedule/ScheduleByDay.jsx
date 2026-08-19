@@ -342,6 +342,7 @@ export default function ScheduleByDay({
 
           return {
             date,
+            weeknumber,
             lessons
           };
         }
@@ -377,7 +378,6 @@ export default function ScheduleByDay({
                   Week{' '}
                   {
                     section
-                      .date
                       .weekNumber
                   }
                 </p>
