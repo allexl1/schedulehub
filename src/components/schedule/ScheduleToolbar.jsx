@@ -3,9 +3,14 @@ import Icon from '../common/Icon';
 
 const ACTIONS = [
   {
-    id: 'days',
+    id: 'continuous',
     label: 'Display',
     icon: 'schedule'
+  },
+  {
+    id: 'compact',
+    label: 'By Day',
+    icon: 'calendar'
   },
   {
     id: 'calendar',
@@ -20,7 +25,7 @@ const ACTIONS = [
 ];
 
 export default function ScheduleToolbar({
-  activeAction = 'days',
+  activeAction = 'continuous',
   onAction,
   isFavorite = false,
   onToggleFavorite
@@ -31,31 +36,38 @@ export default function ScheduleToolbar({
       role="toolbar"
       aria-label="Schedule controls"
     >
-      <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
+      <div className="grid min-w-0 flex-1 grid-cols-4 gap-1.5">
         {ACTIONS.map(action => {
           const isActive =
-            activeAction === action.id;
+            activeAction ===
+            action.id;
 
           return (
             <button
               key={action.id}
               type="button"
               onClick={() =>
-                onAction?.(action.id)
+                onAction?.(
+                  action.id
+                )
               }
-              aria-pressed={isActive}
-              className={`flex min-w-0 items-center justify-center gap-2 rounded-2xl px-2.5 py-3 transition-all active:scale-[0.97] ${
+              aria-pressed={
+                isActive
+              }
+              className={`flex min-w-0 items-center justify-center gap-1.5 rounded-2xl px-1.5 py-3 transition-all active:scale-[0.97] ${
                 isActive
                   ? 'bg-[#2997ff] text-white shadow-sm'
                   : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
               }`}
             >
               <Icon
-                name={action.icon}
-                className="h-[17px] w-[17px] shrink-0"
+                name={
+                  action.icon
+                }
+                className="h-4 w-4 shrink-0"
               />
 
-              <span className="truncate text-[10px] font-bold">
+              <span className="truncate text-[9px] font-bold">
                 {action.label}
               </span>
             </button>
@@ -65,8 +77,12 @@ export default function ScheduleToolbar({
 
       <button
         type="button"
-        onClick={onToggleFavorite}
-        aria-pressed={isFavorite}
+        onClick={
+          onToggleFavorite
+        }
+        aria-pressed={
+          isFavorite
+        }
         aria-label={
           isFavorite
             ? 'Remove group from favorites'
