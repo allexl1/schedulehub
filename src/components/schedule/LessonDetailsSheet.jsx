@@ -1,11 +1,15 @@
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState
 } from 'react';
 
 function getTeacherName(employee) {
-  if (!employee || typeof employee !== 'object') {
+  if (
+    !employee ||
+    typeof employee !== 'object'
+  ) {
     return '';
   }
 
@@ -18,7 +22,10 @@ function getTeacherName(employee) {
 }
 
 function getTeacherPhoto(employee) {
-  if (!employee || typeof employee !== 'object') {
+  if (
+    !employee ||
+    typeof employee !== 'object'
+  ) {
     return '';
   }
 
@@ -33,7 +40,8 @@ function getTeacherPhoto(employee) {
 }
 
 function getTeacherInitials(employee) {
-  const name = getTeacherName(employee);
+  const name =
+    getTeacherName(employee);
 
   if (!name) {
     return '?';
@@ -51,7 +59,11 @@ function getTeacherInitials(employee) {
 }
 
 function getTeachers(item) {
-  if (!Array.isArray(item?.employees)) {
+  if (
+    !Array.isArray(
+      item?.employees
+    )
+  ) {
     return [];
   }
 
@@ -63,7 +75,9 @@ function getTeachers(item) {
 }
 
 function getAuditoryName(auditory) {
-  if (typeof auditory === 'string') {
+  if (
+    typeof auditory === 'string'
+  ) {
     return auditory;
   }
 
@@ -85,10 +99,16 @@ function getAuditoryName(auditory) {
 
 function getRooms(item) {
   if (item?.room) {
-    return [String(item.room)];
+    return [
+      String(item.room)
+    ];
   }
 
-  if (!Array.isArray(item?.auditories)) {
+  if (
+    !Array.isArray(
+      item?.auditories
+    )
+  ) {
     return [];
   }
 
@@ -103,7 +123,7 @@ function getLessonType(item) {
     item?.lessonTypeAbbrev ||
     item?.lessonType ||
     item?.form?.name ||
-    'Lesson'
+    ''
   );
 }
 
@@ -112,29 +132,31 @@ function getWeekLabel(item) {
     item?.weekNumber ??
     item?.weeks;
 
-  if (typeof weeks === 'string') {
+  if (
+    typeof weeks === 'string'
+  ) {
     return weeks.trim();
   }
 
-  if (!Array.isArray(weeks)) {
+  if (
+    !Array.isArray(weeks) ||
+    weeks.length === 0
+  ) {
     return '';
   }
 
-  if (weeks.length === 0) {
-    return 'Every week';
-  }
+  const normalized =
+    weeks
+      .map(Number)
+      .filter(Number.isFinite)
+      .sort(
+        (a, b) => a - b
+      );
 
-  const normalized = weeks
-    .map(Number)
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b);
-
-  if (normalized.length === 0) {
+  if (
+    normalized.length === 0
+  ) {
     return '';
-  }
-
-  if (normalized.length >= 4) {
-    return 'Every week';
   }
 
   return normalized.join(', ');
@@ -150,7 +172,8 @@ function getSubgroupLabel(item) {
     subgroup === null ||
     subgroup === '' ||
     Number(subgroup) === 0 ||
-    String(subgroup).toLowerCase() === 'all'
+    String(subgroup).toLowerCase() ===
+      'all'
   ) {
     return '';
   }
@@ -160,26 +183,38 @@ function getSubgroupLabel(item) {
 
 function getDayLabel(item) {
   if (item?.date) {
-    const date = new Date(item.date);
+    const date =
+      item.date instanceof Date
+        ? item.date
+        : new Date(item.date);
 
-    if (!Number.isNaN(date.getTime())) {
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
       return date.toLocaleDateString(
         'en-US',
         {
           weekday: 'long',
           month: 'long',
-          day: 'numeric'
+          day: 'numeric',
+          year: 'numeric'
         }
       );
     }
   }
 
   if (item?.day) {
-    return String(item.day);
+    return String(
+      item.day
+    );
   }
 
   if (item?.weekday) {
-    return String(item.weekday);
+    return String(
+      item.weekday
+    );
   }
 
   return '';
@@ -190,7 +225,9 @@ function getGroups(item) {
     item?.groups ??
     item?.groupNames;
 
-  if (!Array.isArray(groups)) {
+  if (
+    !Array.isArray(groups)
+  ) {
     return [];
   }
 
@@ -255,6 +292,59 @@ function SectionTitle({
   );
 }
 
+function CloseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function ZoomIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <circle
+        cx="10.5"
+        cy="10.5"
+        r="5.5"
+      />
+      <path d="m15 15 4 4" />
+      <path d="M8.5 10.5h4" />
+      <path d="M10.5 8.5v4" />
+    </svg>
+  );
+}
+
 export default function LessonDetailsSheet({
   lesson,
   onClose,
@@ -266,6 +356,26 @@ export default function LessonDetailsSheet({
     previewTeacher,
     setPreviewTeacher
   ] = useState(null);
+
+  const [
+    sheetPosition,
+    setSheetPosition
+  ] = useState('half');
+
+  const [
+    dragOffset,
+    setDragOffset
+  ] = useState(0);
+
+  const dragState =
+    useRef({
+      active: false,
+      startY: 0,
+      startOffset: 0
+    });
+
+  const sheetRef =
+    useRef(null);
 
   const teachers = useMemo(
     () => getTeachers(lesson),
@@ -302,16 +412,23 @@ export default function LessonDetailsSheet({
       return undefined;
     }
 
-    const handleKeyDown = event => {
-      if (event.key === 'Escape') {
+    const handleKeyDown =
+      event => {
+        if (
+          event.key !== 'Escape'
+        ) {
+          return;
+        }
+
         if (previewTeacher) {
-          setPreviewTeacher(null);
+          setPreviewTeacher(
+            null
+          );
           return;
         }
 
         onClose?.();
-      }
-    };
+      };
 
     document.addEventListener(
       'keydown',
@@ -341,11 +458,116 @@ export default function LessonDetailsSheet({
 
   useEffect(() => {
     setPreviewTeacher(null);
+    setSheetPosition('half');
+    setDragOffset(0);
   }, [lesson]);
 
   if (!lesson) {
     return null;
   }
+
+  const positionPercent =
+    sheetPosition === 'expanded'
+      ? 0
+      : sheetPosition === 'half'
+        ? 44
+        : 76;
+
+  const transform =
+    `translateY(calc(${positionPercent}% + ${dragOffset}px))`;
+
+  const handlePointerDown =
+    event => {
+      if (
+        event.pointerType ===
+        'mouse' &&
+        event.button !== 0
+      ) {
+        return;
+      }
+
+      dragState.current = {
+        active: true,
+        startY: event.clientY,
+        startOffset: 0
+      };
+
+      event.currentTarget.setPointerCapture(
+        event.pointerId
+      );
+    };
+
+  const handlePointerMove =
+    event => {
+      if (
+        !dragState.current.active
+      ) {
+        return;
+      }
+
+      const delta =
+        event.clientY -
+        dragState.current.startY;
+
+      setDragOffset(delta);
+    };
+
+  const finishDrag = () => {
+    if (
+      !dragState.current.active
+    ) {
+      return;
+    }
+
+    const delta =
+      dragState.current.startY -
+      dragState.current.startY;
+
+    const currentOffset =
+      dragOffset;
+
+    dragState.current.active =
+      false;
+
+    setDragOffset(0);
+
+    if (
+      currentOffset < -80
+    ) {
+      setSheetPosition(
+        'expanded'
+      );
+      return;
+    }
+
+    if (
+      currentOffset > 80
+    ) {
+      setSheetPosition(
+        'collapsed'
+      );
+      return;
+    }
+
+    setSheetPosition(
+      'half'
+    );
+  };
+
+  const handleBackdropClick =
+    () => {
+      if (
+        sheetPosition ===
+        'expanded'
+      ) {
+        setSheetPosition(
+          'half'
+        );
+        return;
+      }
+
+      onClose?.();
+    };
 
   return (
     <div
@@ -360,17 +582,62 @@ export default function LessonDetailsSheet({
       <button
         type="button"
         aria-label="Close lesson details"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/30"
+        onClick={
+          handleBackdropClick
+        }
+        className={`absolute inset-0 bg-black/35 transition-opacity duration-300 ${
+          sheetPosition ===
+          'expanded'
+            ? 'opacity-50'
+            : 'opacity-100'
+        }`}
       />
 
-      <div className="absolute inset-x-0 bottom-0 flex max-h-[88vh] flex-col overflow-hidden rounded-t-[28px] border border-[var(--border-glass)] bg-[var(--background-primary)] shadow-2xl">
+      <div
+        ref={sheetRef}
+        className="absolute inset-x-0 bottom-0 flex h-[88vh] flex-col overflow-hidden rounded-t-[28px] border border-[var(--border-glass)] bg-[var(--background-primary)] shadow-2xl"
+        style={{
+          transform,
+          transition:
+            dragState.current
+              .active
+              ? 'none'
+              : 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)'
+        }}
+      >
         <div
-          aria-hidden="true"
-          className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-[var(--text-secondary)]/30"
-        />
+          className="shrink-0 touch-none cursor-grab px-5 pb-2 pt-2 active:cursor-grabbing"
+          onPointerDown={
+            handlePointerDown
+          }
+          onPointerMove={
+            handlePointerMove
+          }
+          onPointerUp={
+            finishDrag
+          }
+          onPointerCancel={
+            finishDrag
+          }
+          onPointerLeave={
+            event => {
+              if (
+                event.buttons !== 0
+              ) {
+                return;
+              }
 
-        <div className="flex items-center justify-between gap-4 px-5 pb-3 pt-4">
+              finishDrag();
+            }
+          }
+        >
+          <div
+            aria-hidden="true"
+            className="mx-auto h-1.5 w-10 rounded-full bg-[var(--text-secondary)]/30"
+          />
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-4 px-5 pb-4 pt-2">
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
               Lesson details
@@ -385,14 +652,14 @@ export default function LessonDetailsSheet({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-glass)] text-lg text-[var(--text-secondary)] transition-transform active:scale-90"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-glass)] text-[var(--text-secondary)] transition-transform active:scale-90"
             aria-label="Close lesson details"
           >
-            ×
+            <CloseIcon />
           </button>
         </div>
 
-        <div className="overflow-y-auto px-5 pb-8">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-10">
           {lesson.subjectFullName &&
             lesson.subjectFullName !==
               lesson.subject && (
@@ -414,15 +681,17 @@ export default function LessonDetailsSheet({
             <InfoRow
               label="Day"
               value={
-                dayLabel || undefined
+                dayLabel || '—'
               }
             />
 
             <InfoRow
               label="Type"
-              value={getLessonType(
-                lesson
-              )}
+              value={
+                getLessonType(
+                  lesson
+                ) || '—'
+              }
             />
 
             <InfoRow
@@ -512,9 +781,9 @@ export default function LessonDetailsSheet({
 
                             <span
                               aria-hidden="true"
-                              className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--background-primary)] bg-[var(--surface-glass)] text-[10px] text-[var(--text-primary)]"
+                              className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--background-primary)] bg-[var(--surface-glass)] text-[var(--text-primary)]"
                             >
-                              ⌕
+                              <ZoomIcon />
                             </span>
                           </button>
                         ) : (
@@ -566,9 +835,9 @@ export default function LessonDetailsSheet({
 
                         <span
                           aria-hidden="true"
-                          className="shrink-0 text-sm text-[var(--text-secondary)]"
+                          className="shrink-0 text-[var(--text-secondary)]"
                         >
-                          ›
+                          <ChevronIcon />
                         </span>
                       </div>
                     );
@@ -605,12 +874,7 @@ export default function LessonDetailsSheet({
                       </span>
 
                       {onGroupClick && (
-                        <span
-                          aria-hidden="true"
-                          className="text-sm text-[var(--text-secondary)]"
-                        >
-                          ›
-                        </span>
+                        <ChevronIcon />
                       )}
                     </button>
                   )
@@ -632,94 +896,38 @@ export default function LessonDetailsSheet({
               </div>
             </section>
           )}
-
-          {rooms.length > 0 &&
-            Array.isArray(
-              lesson.auditories
-            ) &&
-            lesson.auditories.length >
-              0 && (
-              <section className="mt-5">
-                <SectionTitle>
-                  Auditories
-                </SectionTitle>
-
-                <div className="space-y-2">
-                  {lesson.auditories.map(
-                    (
-                      auditory,
-                      index
-                    ) => {
-                      const name =
-                        getAuditoryName(
-                          auditory
-                        );
-
-                      if (!name) {
-                        return null;
-                      }
-
-                      return (
-                        <div
-                          key={`${name}-${index}`}
-                          className="rounded-xl bg-[var(--surface-glass)] px-3 py-2 text-sm text-[var(--text-primary)]"
-                        >
-                          {name}
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-              </section>
-            )}
         </div>
       </div>
 
       {previewTeacher && (
-        <div
-          className="absolute inset-0 z-[90] flex items-center justify-center bg-black/75 p-6"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Teacher photo"
-        >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-6">
           <button
             type="button"
             onClick={() =>
-              setPreviewTeacher(null)
+              setPreviewTeacher(
+                null
+              )
             }
             className="absolute inset-0"
             aria-label="Close teacher photo"
           />
 
-          <div className="relative z-10 max-w-sm">
+          <div className="relative z-10 max-w-full">
             <img
               src={getTeacherPhoto(
                 previewTeacher
               )}
-              alt={
-                getTeacherName(
-                  previewTeacher
-                ) || 'Teacher'
-              }
-              className="max-h-[70vh] max-w-full rounded-3xl object-contain shadow-2xl"
+              alt={getTeacherName(
+                previewTeacher
+              )}
+              className="max-h-[75vh] max-w-full rounded-3xl object-contain shadow-2xl"
             />
 
             <p className="mt-3 text-center text-sm font-semibold text-white">
               {getTeacherName(
                 previewTeacher
-              ) || 'Teacher'}
+              )}
             </p>
-
-            <button
-              type="button"
-              onClick={() =>
-                setPreviewTeacher(null)
-              }
-              className="mx-auto mt-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xl text-white"
-              aria-label="Close teacher photo"
-            >
-              ×
-            </button>
           </div>
         </div>
       )}
