@@ -198,10 +198,14 @@ function readFavoriteGroups() {
 function saveFavoriteGroups(
   groups
 ) {
-  localStorage.setItem(
-    FAVORITES_KEY,
-    JSON.stringify(groups)
-  );
+  try {
+    localStorage.setItem(
+      FAVORITES_KEY,
+      JSON.stringify(groups)
+    );
+  } catch {
+    return;
+  }
 }
 
 function formatExamDate(
@@ -680,32 +684,32 @@ export default function ScheduleView({
                 })
               );
 
-  const items = [
-  ...lessons,
-  ...personal.map(
-    event => ({
-      ...event,
-      status:
-        sameDate(
-          section.date,
-          now
-        )
-          ? 'upcoming'
-          : section.date <
-              now
-            ? 'past'
-            : 'upcoming'
-    })
-  )
-].sort(
-  (a, b) =>
-    parseStartTimeInMinutes(
-      a.time
-    ) -
-    parseStartTimeInMinutes(
-      b.time
-    )
-);
+            const items = [
+              ...lessons,
+              ...personal.map(
+                event => ({
+                  ...event,
+                  status:
+                    sameDate(
+                      section.date,
+                      now
+                    )
+                      ? 'upcoming'
+                      : section.date <
+                          now
+                        ? 'past'
+                        : 'upcoming'
+                })
+              )
+            ].sort(
+              (a, b) =>
+                parseStartTimeInMinutes(
+                  a.time
+                ) -
+                parseStartTimeInMinutes(
+                  b.time
+                )
+            );
 
             return {
               ...section,
