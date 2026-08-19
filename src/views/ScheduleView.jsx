@@ -20,21 +20,12 @@ import {
 } from '../utils/time';
 
 import {
-  resolveLessonsForDate
-} from '../utils/scheduleResolver';
+  getInitialContinuousSchedule,
+  getMoreContinuousSchedule
+} from '../utils/continuousSchedule';
 
 const PERSONAL_EVENTS_KEY =
   'sh_personal_events';
-
-const CONTINUOUS_DAYS = 14;
-
-function addDays(date, amount) {
-  const result = new Date(date);
-  result.setDate(
-    result.getDate() + amount
-  );
-  return result;
-}
 
 function startOfDay(date) {
   const result = new Date(date);
@@ -49,32 +40,21 @@ function startOfDay(date) {
   return result;
 }
 
+function addDays(date, amount) {
+  const result = new Date(date);
+
+  result.setDate(
+    result.getDate() + amount
+  );
+
+  return result;
+}
+
 function sameDate(a, b) {
   return (
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
-  );
-}
-
-function getDateKey(date) {
-  return [
-    date.getFullYear(),
-    String(
-      date.getMonth() + 1
-    ).padStart(2, '0'),
-    String(
-      date.getDate()
-    ).padStart(2, '0')
-  ].join('-');
-}
-
-function getDayName(date) {
-  return date.toLocaleDateString(
-    'en-US',
-    {
-      weekday: 'long'
-    }
   );
 }
 
@@ -85,6 +65,15 @@ function formatDate(date) {
       month: 'long',
       day: 'numeric',
       year: 'numeric'
+    }
+  );
+}
+
+function getDayName(date) {
+  return date.toLocaleDateString(
+    'en-US',
+    {
+      weekday: 'long'
     }
   );
 }
@@ -290,7 +279,20 @@ export default function ScheduleView({
     readPersonalEvents
   );
 
+  const [
+    loadedDays,
+    setLoadedDays
+  ] = useState([]);
+
+  const [
+    isLoadingMore,
+    setIsLoadingMore
+  ] = useState(false);
+
   const scheduleListRef =
+    useRef(null);
+
+  const loadMoreRef =
     useRef(null);
 
   useEffect(() => {
@@ -326,70 +328,170 @@ export default function ScheduleView({
       ? scheduleData.exams
       : [];
 
-  /*
-   * Swift's continuous schedule starts
-   * around the current date and loads real
-   * schedule days incrementally.
-   *
-   * The web resolver is already responsible
-   * for academic-week and date matching.
-   */
-  const continuousDates =
-    useMemo(() => {
-      const today =
-        startOfDay(now);
+  const scheduleStartDate =
+    scheduleData?.startDate ||
+    null;
 
-      return Array.from(
-        {
-          length:
-            CONTINUOUS_DAYS
-      },
-        (_, index) =>
-          addDays(
-            today,
-            index - 1
-          )
+  const scheduleEndDate =
+    scheduleData?.endDate ||
+    null;
+
+  const scheduleReady =
+    Boolean(
+      scheduleStartDate &&
+      scheduleEndDate &&
+      Object.keys(
+        schedules
+      ).length > 0
+    );
+
+  /*
+   * Initial continuous schedule.
+   *
+   * This follows the Swift behavior:
+   * start around yesterday and resolve
+   * actual schedule dates inside the
+   * API-provided schedule boundaries.
+   */
+  useEffect(() => {
+    if (!scheduleReady) {
+      setLoadedDays([]);
+      return;
+    }
+
+    const days =
+      getInitialContinuousSchedule({
+        schedules,
+        startDate:
+          scheduleStartDate,
+        endDate:
+          scheduleEndDate,
+        now,
+        subgroup,
+        limit: 12
+      });
+
+    setLoadedDays(days);
+  }, [
+    scheduleReady,
+    schedules,
+    scheduleStartDate,
+    scheduleEndDate,
+    subgroup
+  ]);
+
+  const loadMoreDays = () => {
+    if (
+      isLoadingMore ||
+      loadedDays.length === 0
+    ) {
+      return;
+    }
+
+    const lastDay =
+      loadedDays[
+        loadedDays.length - 1
+      ];
+
+    if (
+      !lastDay?.date ||
+      !scheduleEndDate
+    ) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+
+    const moreDays =
+      getMoreContinuousSchedule({
+        schedules,
+        startDate:
+          scheduleStartDate,
+        endDate:
+          scheduleEndDate,
+        lastDate:
+          lastDay.date,
+        now,
+        subgroup,
+        limit: 10
+      });
+
+    if (moreDays.length > 0) {
+      setLoadedDays(
+        current => [
+          ...current,
+          ...moreDays
+        ]
       );
-    }, [now]);
+    }
+
+    setIsLoadingMore(false);
+  };
+
+  /*
+   * Automatically request the next batch
+   * when the user reaches the bottom.
+   */
+  useEffect(() => {
+    const element =
+      loadMoreRef.current;
+
+    if (!element) {
+      return undefined;
+    }
+
+    const observer =
+      new IntersectionObserver(
+        entries => {
+          if (
+            entries[0]?.isIntersecting
+          ) {
+            loadMoreDays();
+          }
+        },
+        {
+          rootMargin:
+            '500px'
+        }
+      );
+
+    observer.observe(
+      element
+    );
+
+    return () =>
+      observer.disconnect();
+  }, [
+    loadedDays,
+    isLoadingMore,
+    scheduleEndDate
+  ]);
 
   const daySections =
     useMemo(() => {
-      return continuousDates
-        .map(date => {
-          const lessons =
-            resolveLessonsForDate(
-              schedules,
-              date,
-              currentWeek,
-              subgroup,
-              {
-                referenceDate: now
-              }
-            );
-
+      return loadedDays.map(
+        section => {
           const personal =
             personalEvents.filter(
               event =>
                 event?.day ===
                 getPersonalDay(
-                  date
+                  section.date
                 )
             );
 
           const lessonItems =
-            Array.isArray(lessons)
-              ? lessons.map(
-                  lesson => ({
-                    ...lesson,
-                    status:
-                      getLessonStatus(
-                        lesson,
-                        date,
-                        now
-                      )
-                  })
-                )
-              : [];
+            section.lessons.map(
+              lesson => ({
+                ...lesson,
+                status:
+                  getLessonStatus(
+                    lesson,
+                    section.date,
+                    now
+                  )
+              })
+            );
 
           const items = [
             ...lessonItems,
@@ -398,11 +500,11 @@ export default function ScheduleView({
                 ...event,
                 status:
                   sameDate(
-                    date,
+                    section.date,
                     now
                   )
                     ? 'upcoming'
-                    : date < now
+                    : section.date < now
                       ? 'past'
                       : 'upcoming'
               })
@@ -418,100 +520,14 @@ export default function ScheduleView({
           );
 
           return {
-            date,
-            dateKey:
-              getDateKey(
-                date
-              ),
+            ...section,
             items
           };
-        })
-        .filter(
-          section =>
-            section.items
-              .length > 0
-        );
-    }, [
-      continuousDates,
-      schedules,
-      currentWeek,
-      subgroup,
-      personalEvents,
-      now
-    ]);
-
-  const selectedDayLessons =
-    useMemo(
-      () =>
-        resolveLessonsForDate(
-          schedules,
-          selectedDate,
-          currentWeek,
-          subgroup,
-          {
-            referenceDate: now
-          }
-        ),
-      [
-        schedules,
-        selectedDate,
-        currentWeek,
-        subgroup,
-        now
-      ]
-    );
-
-  const selectedDayPersonal =
-    useMemo(
-      () =>
-        personalEvents.filter(
-          event =>
-            event?.day ===
-            getPersonalDay(
-              selectedDate
-            )
-        ),
-      [
-        personalEvents,
-        selectedDate
-      ]
-    );
-
-  const selectedDayItems =
-    useMemo(() => {
-      const lessons =
-        Array.isArray(
-          selectedDayLessons
-        )
-          ? selectedDayLessons.map(
-              lesson => ({
-                ...lesson,
-                status:
-                  getLessonStatus(
-                    lesson,
-                    selectedDate,
-                    now
-                  )
-              })
-            )
-          : [];
-
-      return [
-        ...lessons,
-        ...selectedDayPersonal
-      ].sort(
-        (a, b) =>
-          parseStartTimeInMinutes(
-            a.time
-          ) -
-          parseStartTimeInMinutes(
-            b.time
-          )
+        }
       );
     }, [
-      selectedDayLessons,
-      selectedDayPersonal,
-      selectedDate,
+      loadedDays,
+      personalEvents,
       now
     ]);
 
@@ -599,6 +615,7 @@ export default function ScheduleView({
       setEditingEvent(
         event
       );
+
       setIsModalOpen(true);
     };
 
@@ -687,7 +704,7 @@ export default function ScheduleView({
                 }
                 className="scroll-mt-4"
               >
-                <div className="mb-2 px-1">
+                <div className="mb-3 px-1">
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-bold text-[var(--text-primary)]">
                       {formatDate(
@@ -710,11 +727,20 @@ export default function ScheduleView({
                     )}
                   </div>
 
-                  <p className="text-[11px] text-[var(--text-secondary)]">
-                    {getDayName(
-                      section.date
-                    )}
-                  </p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      {getDayName(
+                        section.date
+                      )}
+                    </p>
+
+                    <span className="text-[10px] text-[var(--text-secondary)]">
+                      Week{' '}
+                      {
+                        section.weekNumber
+                      }
+                    </span>
+                  </div>
                 </div>
 
                 <div className="overflow-hidden rounded-2xl bg-[var(--surface-glass)]">
@@ -754,6 +780,7 @@ export default function ScheduleView({
         )}
 
         {!loading &&
+          scheduleReady &&
           daySections.length ===
             0 && (
             <div className="rounded-2xl bg-[var(--surface-glass)] px-4 py-8 text-center">
@@ -762,12 +789,25 @@ export default function ScheduleView({
               </p>
 
               <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                The schedule data is loaded,
-                but there are no classes in
-                the current date window.
+                There are no classes in
+                the current schedule range.
               </p>
             </div>
           )}
+
+        {scheduleReady &&
+          daySections.length > 0 && (
+          <div
+            ref={loadMoreRef}
+            className="flex min-h-12 items-center justify-center"
+          >
+            {isLoadingMore && (
+              <span className="text-xs text-[var(--text-secondary)]">
+                Loading more...
+              </span>
+            )}
+          </div>
+        )}
       </div>
     );
 
@@ -872,9 +912,16 @@ export default function ScheduleView({
                   'All groups'}
               </span>
 
-              <span className="text-xs text-[var(--text-secondary)]">
-                ▾
-              </span>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-4 w-4 text-[var(--text-secondary)]"
+                aria-hidden="true"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </button>
           </div>
 
