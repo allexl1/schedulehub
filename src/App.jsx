@@ -217,18 +217,14 @@ function AppContent() {
 
       <main>
         {activeTab === 'home' && (
-          <HomeView
-            user={user}
-            group={group}
-            subgroup={subgroup}
-            scheduleData={{
-              student,
-              nextLesson,
-              todaySchedule
-            }}
-            status={statusState}
-            lastUpdatedTimestamp={lastUpdated}
-          />
+<HomeView
+  user={user}
+  group={group}
+  subgroup={subgroup}
+  scheduleData={scheduleData}
+  status={statusState}
+  lastUpdatedTimestamp={lastUpdated}
+  />
         )}
 
         {activeTab === 'schedule' && (
