@@ -1,10 +1,10 @@
 import React, {
   useEffect,
+  useMemo,
   useState
 } from 'react';
 
 import NextClassCard from '../components/home/NextClassCard';
-import StatusPill from '../components/home/StatusPill';
 import { formatCacheAge } from '../utils/formatCacheTime';
 
 import {
@@ -13,7 +13,157 @@ import {
   formatRoomString
 } from '../utils/time';
 
+import {
+  getAcademicWeekForDate,
+  resolveLessonsForDate
+} from '../utils/scheduleResolver';
+
 import { useLanguage } from '../context/LanguageContext';
+
+const PERSONAL_EVENTS_KEY =
+  'sh_personal_events';
+
+const DAY_NAMES = [
+  'Sun',
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat'
+];
+
+function readPersonalEvents() {
+  try {
+    const saved =
+      localStorage.getItem(
+        PERSONAL_EVENTS_KEY
+      );
+
+    if (!saved) {
+      return [];
+    }
+
+    const parsed =
+      JSON.parse(saved);
+
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function getLessonColor(item) {
+  if (item?.color) {
+    return item.color;
+  }
+
+  const type =
+    String(
+      item?.type || ''
+    ).toLowerCase();
+
+  if (
+    type.includes('lecture') ||
+    type.includes('лек')
+  ) {
+    return '#2997ff';
+  }
+
+  if (
+    type.includes('lab') ||
+    type.includes('лаб')
+  ) {
+    return '#30d158';
+  }
+
+  if (
+    type.includes('practice') ||
+    type.includes('практ')
+  ) {
+    return '#ff9f0a';
+  }
+
+  if (
+    type.includes('exam') ||
+    type.includes('экзам')
+  ) {
+    return '#ff453a';
+  }
+
+  if (item?.isPersonal) {
+    return '#bf5af2';
+  }
+
+  return '#8e8e93';
+}
+
+function getGreeting(now) {
+  const hour =
+    now.getHours();
+
+  if (
+    hour >= 6 &&
+    hour < 12
+  ) {
+    return {
+      text: 'Good morning',
+      emoji: '☀️'
+    };
+  }
+
+  if (
+    hour >= 12 &&
+    hour < 17
+  ) {
+    return {
+      text: 'Good afternoon',
+      emoji: '🌤️'
+    };
+  }
+
+  if (
+    hour >= 17 &&
+    hour < 22
+  ) {
+    return {
+      text: 'Good evening',
+      emoji: '🌆'
+    };
+  }
+
+  return {
+    text: 'Good night',
+    emoji: '🌙'
+  };
+}
+
+function isSameLesson(
+  a,
+  b
+) {
+  if (!a || !b) {
+    return false;
+  }
+
+  if (
+    a === b
+  ) {
+    return true;
+  }
+
+  if (
+    a.id &&
+    b.id &&
+    a.id === b.id
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 export default function HomeView({
   user,
@@ -24,27 +174,66 @@ export default function HomeView({
   lastUpdatedTimestamp
 }) {
   const {
-    student,
-    nextLesson,
-    todaySchedule
-  } = scheduleData || {};
-
-  const {
     dictionary,
     language
   } = useLanguage();
 
-  const [now, setNow] = useState(
-    () => new Date()
-  );
+  const [now, setNow] =
+    useState(
+      () => new Date()
+    );
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(new Date());
-    }, 30000);
+    const interval =
+      setInterval(() => {
+        setNow(
+          new Date()
+        );
+      }, 30000);
 
-    return () => clearInterval(interval);
+    return () =>
+      clearInterval(
+        interval
+      );
   }, []);
+
+  const data =
+    scheduleData || {};
+
+  const schedules =
+    data?.schedules &&
+    typeof data.schedules ===
+      'object'
+      ? data.schedules
+      : {};
+
+  const student =
+    data?.studentGroup ||
+    data?.student ||
+    null;
+
+  const currentWeekFromData =
+    Number(
+      data?.currentWeek
+    );
+
+  const academicWeek =
+    getAcademicWeekForDate(
+      now,
+      now
+    );
+
+  const weekNumber =
+    academicWeek ||
+    (
+      Number.isInteger(
+        currentWeekFromData
+      ) &&
+      currentWeekFromData >= 1 &&
+      currentWeekFromData <= 4
+        ? currentWeekFromData
+        : 1
+    );
 
   const localeCode =
     language === 'ru'
@@ -59,68 +248,100 @@ export default function HomeView({
       }
     );
 
-  const daysShort = [
-    'Sun',
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat'
-  ];
-
-  const todayFilterCode =
-    daysShort[now.getDay()];
-
-  const [personalEvents] = useState(() => {
-    try {
-      const saved =
-        localStorage.getItem(
-          'sh_personal_events'
-        );
-
-      return saved
-        ? JSON.parse(saved)
-        : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const dayPersonalEvents =
-    personalEvents.filter(
-      event =>
-        event.day ===
-        todayFilterCode
+  const personalEvents =
+    useMemo(
+      () =>
+        readPersonalEvents(),
+      []
     );
 
-  const combinedTodaySchedule = [
-    ...(todaySchedule || []),
-    ...dayPersonalEvents
-  ].sort((a, b) => {
-    const timeA =
-      parseStartTimeInMinutes(
-        a.time
+  const todayPersonalEvents =
+    useMemo(() => {
+      const day =
+        DAY_NAMES[
+          now.getDay()
+        ];
+
+      return personalEvents.filter(
+        event =>
+          event?.day === day
       );
+    }, [
+      personalEvents,
+      now
+    ]);
 
-    const timeB =
-      parseStartTimeInMinutes(
-        b.time
+  /*
+   * IMPORTANT:
+   *
+   * Home resolves today's schedule from the
+   * actual date instead of trusting the
+   * potentially stale todaySchedules/nextLesson
+   * values prepared by the service.
+   *
+   * This prevents future lessons such as
+   * September 1 from being treated as if they
+   * were happening today.
+   */
+  const resolvedTodayLessons =
+    useMemo(
+      () =>
+        resolveLessonsForDate(
+          schedules,
+          now,
+          weekNumber,
+          subgroup,
+          {
+            referenceDate: now
+          }
+        ),
+      [
+        schedules,
+        now,
+        weekNumber,
+        subgroup
+      ]
+    );
+
+  const combinedTodaySchedule =
+    useMemo(() => {
+      return [
+        ...resolvedTodayLessons,
+        ...todayPersonalEvents
+      ].sort(
+        (a, b) => {
+          const timeA =
+            parseStartTimeInMinutes(
+              a.time
+            );
+
+          const timeB =
+            parseStartTimeInMinutes(
+              b.time
+            );
+
+          if (
+            timeA === timeB
+          ) {
+            return a.isPersonal
+              ? 1
+              : -1;
+          }
+
+          return (
+            timeA - timeB
+          );
+        }
       );
-
-    if (timeA === timeB) {
-      return a.isPersonal
-        ? 1
-        : -1;
-    }
-
-    return timeA - timeB;
-  });
+    }, [
+      resolvedTodayLessons,
+      todayPersonalEvents
+    ]);
 
   const lifecycle =
     evaluateScheduleLifecycle(
       combinedTodaySchedule,
-      nextLesson,
+      null,
       now
     );
 
@@ -130,49 +351,18 @@ export default function HomeView({
       language
     );
 
-  const weekNumber =
-    Number(
-      student?.currentWeek
-    ) || 1;
-
   const displayName =
     user?.first_name ||
     (
-      typeof student === 'object'
+      typeof student ===
+      'object'
         ? student?.name
         : student
     ) ||
     'Student';
 
-  const greetingData = (() => {
-    const hour = now.getHours();
-
-    if (hour >= 6 && hour < 12) {
-      return {
-        text: 'Доброе утро',
-        emoji: '☀️'
-      };
-    }
-
-    if (hour >= 12 && hour < 17) {
-      return {
-        text: 'Добрый день',
-        emoji: '🌤️'
-      };
-    }
-
-    if (hour >= 17 && hour < 22) {
-      return {
-        text: 'Добрый вечер',
-        emoji: '🌆'
-      };
-    }
-
-    return {
-      text: 'Доброй ночи',
-      emoji: '🌙'
-    };
-  })();
+  const greetingData =
+    getGreeting(now);
 
   const greetingText =
     `${greetingData.text}, ${displayName}`;
@@ -185,10 +375,10 @@ export default function HomeView({
         : 'text-[32px]';
 
   return (
-    <div className="pt-2 pb-6 space-y-6">
+    <div className="space-y-6 pb-6 pt-2">
       <header>
         <h1
-          className={`${titleClass} font-bold tracking-tight leading-tight text-[var(--text-primary)] break-words`}
+          className={`${titleClass} break-words font-bold leading-tight tracking-tight text-[var(--text-primary)]`}
         >
           {greetingData.text},{' '}
           {displayName}{' '}
@@ -196,11 +386,11 @@ export default function HomeView({
         </h1>
 
         <p className="mt-2 text-sm font-medium text-[var(--text-secondary)]">
-          Группа: {group}
+          Group: {group || 'Not selected'}
           {' • '}
-          Подгруппа: {subgroup}
+          Subgroup: {subgroup}
           {' • '}
-          Неделя: {weekNumber}
+          Week: {weekNumber}
         </p>
       </header>
 
@@ -229,59 +419,38 @@ export default function HomeView({
             )
           </h2>
 
-          <span className="text-[11px] font-medium text-[var(--text-secondary)] opacity-60 capitalize">
+          <span className="text-[11px] font-medium capitalize text-[var(--text-secondary)] opacity-60">
             {todayDayName}
           </span>
         </div>
 
         {combinedTodaySchedule.length === 0 ? (
-          <div className="py-8 text-center text-xs text-[var(--text-secondary)] opacity-60 border-t border-[var(--border-glass)]/30">
+          <div className="border-t border-[var(--border-glass)]/30 py-8 text-center text-xs text-[var(--text-secondary)] opacity-60">
             {dictionary.noEventsToday}
           </div>
         ) : (
-          <div className="divide-y divide-[var(--border-glass)]/25 border-t border-b border-[var(--border-glass)]/25">
+          <div className="divide-y divide-[var(--border-glass)]/25 border-b border-t border-[var(--border-glass)]/25">
             {combinedTodaySchedule.map(
-              (item, index) => {
+              (
+                item,
+                index
+              ) => {
                 const isCurrent =
-                  lifecycle.currentLesson &&
-                  (
-                    item ===
-                      lifecycle.currentLesson ||
-                    item.id ===
-                      lifecycle.currentLesson.id
+                  isSameLesson(
+                    item,
+                    lifecycle.currentLesson
                   );
 
                 const isNext =
-                  lifecycle.upcomingLesson &&
-                  (
-                    item ===
-                      lifecycle.upcomingLesson ||
-                    item.id ===
-                      lifecycle.upcomingLesson.id
+                  isSameLesson(
+                    item,
+                    lifecycle.upcomingLesson
                   );
 
-                const lessonType =
-                  item.type || '';
-
                 const lessonColor =
-                  lessonType === 'Lecture'
-                    ? '#2997ff'
-                    : lessonType === 'Lab'
-                      ? '#30d158'
-                      : lessonType === 'Practice'
-                        ? '#ff9f0a'
-                        : lessonType === 'Exam'
-                          ? '#ff453a'
-                          : item.isPersonal
-                            ? '#bf5af2'
-                            : '#8e8e93';
-
-                const borderIndicatorColor =
-                  isCurrent
-                    ? '#30d158'
-                    : isNext
-                      ? '#2997ff'
-                      : lessonColor;
+                  getLessonColor(
+                    item
+                  );
 
                 const roomText =
                   formatRoomString(
@@ -290,7 +459,8 @@ export default function HomeView({
                   );
 
                 const teacherText =
-                  item.teacher || '';
+                  item.teacher ||
+                  '';
 
                 const metaText = [
                   roomText,
@@ -303,26 +473,30 @@ export default function HomeView({
                   <div
                     key={
                       item.id ||
-                      index
+                      `${item.subject}-${item.time}-${index}`
                     }
-                    className="py-3 pl-2.5 border-l-2 flex items-start gap-3.5 transition-colors"
+                    className="flex items-start gap-3.5 border-l-2 py-3 pl-2.5 transition-colors"
                     style={{
                       borderLeftColor:
-                        borderIndicatorColor
+                        isCurrent
+                          ? '#30d158'
+                          : isNext
+                            ? '#2997ff'
+                            : lessonColor
                     }}
                   >
                     <div
-                      className={`w-11 shrink-0 text-xs font-mono pt-0.5 flex items-center gap-1.5 ${
+                      className={`flex w-11 shrink-0 items-center gap-1.5 pt-0.5 font-mono text-xs ${
                         isCurrent
-                          ? 'text-[var(--text-primary)] font-semibold'
+                          ? 'font-semibold text-[var(--text-primary)]'
                           : isNext
-                            ? 'text-[#2997ff] font-semibold'
+                            ? 'font-semibold text-[#2997ff]'
                             : 'text-[var(--text-secondary)] opacity-70'
                       }`}
                     >
                       {isNext &&
                         lifecycle.currentLesson && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#2997ff] shrink-0" />
+                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2997ff]" />
                         )}
 
                       <span>
@@ -337,7 +511,7 @@ export default function HomeView({
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span
-                          className="w-2 h-2 rounded-full shrink-0"
+                          className="h-2 w-2 shrink-0 rounded-full"
                           style={{
                             backgroundColor:
                               lessonColor
@@ -345,18 +519,19 @@ export default function HomeView({
                         />
 
                         <div
-                          className={`text-sm leading-snug line-clamp-2 ${
+                          className={`line-clamp-2 text-sm leading-snug ${
                             isCurrent ||
                             isNext
                               ? 'font-semibold text-[var(--text-primary)]'
                               : 'font-normal text-[var(--text-primary)]'
                           }`}
                         >
-                          {item.subject}
+                          {item.subject ||
+                            'Lesson'}
                         </div>
                       </div>
 
-                      <div className="text-xs text-[var(--text-secondary)] opacity-65 leading-snug break-words">
+                      <div className="break-words text-xs leading-snug text-[var(--text-secondary)] opacity-65">
                         {item.isPersonal ? (
                           <span className="italic">
                             {
@@ -377,7 +552,7 @@ export default function HomeView({
       </section>
 
       {formattedAge && (
-        <div className="text-[10px] text-[var(--text-secondary)] opacity-50 text-center">
+        <div className="text-center text-[10px] text-[var(--text-secondary)] opacity-50">
           {formattedAge}
         </div>
       )}
