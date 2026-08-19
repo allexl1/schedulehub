@@ -5,8 +5,8 @@ import React, {
   useState
 } from 'react';
 
-import TeacherDetailsSheet from '../components/schedule/TeacherDetailsSheet';
 import LessonDetailsSheet from '../components/schedule/LessonDetailsSheet';
+import TeacherDetailsSheet from '../components/schedule/TeacherDetailsSheet';
 import ScheduleToolbar from '../components/schedule/ScheduleToolbar';
 import ScheduleCalendar from '../components/schedule/ScheduleCalendar';
 import PersonalEventModal from '../components/schedule/PersonalEventModal';
@@ -20,23 +20,36 @@ import {
 } from '../utils/time';
 
 import {
-  resolveLessonsForDate,
-  resolveScheduleForDate
+  resolveLessonsForDate
 } from '../utils/scheduleResolver';
 
-const PERSONAL_EVENTS_KEY = 'sh_personal_events';
+const PERSONAL_EVENTS_KEY =
+  'sh_personal_events';
+
+const CONTINUOUS_DAYS = 14;
 
 function addDays(date, amount) {
   const result = new Date(date);
-  result.setDate(result.getDate() + amount);
+  result.setDate(
+    result.getDate() + amount
+  );
+  return result;
+}
+
+function startOfDay(date) {
+  const result = new Date(date);
+
+  result.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
   return result;
 }
 
 function sameDate(a, b) {
-  if (!a || !b) {
-    return false;
-  }
-
   return (
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -44,37 +57,89 @@ function sameDate(a, b) {
   );
 }
 
-function initialDate() {
-  const today = new Date();
-
-  return today.getDay() === 0
-    ? addDays(today, -1)
-    : today;
+function getDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(
+      date.getMonth() + 1
+    ).padStart(2, '0'),
+    String(
+      date.getDate()
+    ).padStart(2, '0')
+  ].join('-');
 }
 
-function getScheduleData(value) {
-  return value?.data || value || {};
+function getDayName(date) {
+  return date.toLocaleDateString(
+    'en-US',
+    {
+      weekday: 'long'
+    }
+  );
 }
 
-function hasLessons(schedules) {
-  return Object.values(schedules || {}).some(
-    value =>
-      Array.isArray(value) &&
-      value.length > 0
+function formatDate(date) {
+  return date.toLocaleDateString(
+    'en-US',
+    {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    }
+  );
+}
+
+function getRelativeLabel(
+  date,
+  now
+) {
+  if (sameDate(date, now)) {
+    return 'Today';
+  }
+
+  if (
+    sameDate(
+      date,
+      addDays(now, -1)
+    )
+  ) {
+    return 'Yesterday';
+  }
+
+  if (
+    sameDate(
+      date,
+      addDays(now, 1)
+    )
+  ) {
+    return 'Tomorrow';
+  }
+
+  return '';
+}
+
+function getPersonalDay(date) {
+  return date.toLocaleDateString(
+    'en-US',
+    {
+      weekday: 'short'
+    }
   );
 }
 
 function readPersonalEvents() {
   try {
-    const saved = localStorage.getItem(
-      PERSONAL_EVENTS_KEY
-    );
+    const value =
+      localStorage.getItem(
+        PERSONAL_EVENTS_KEY
+      );
 
-    if (!saved) {
+    if (!value) {
       return [];
     }
 
-    const parsed = JSON.parse(saved);
+    const parsed =
+      JSON.parse(value);
 
     return Array.isArray(parsed)
       ? parsed
@@ -84,108 +149,18 @@ function readPersonalEvents() {
   }
 }
 
-function formatDateTitle(date) {
-  return date.toLocaleDateString(
-    'en-US',
-    {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    }
-  );
-}
-
-function formatMonthDay(date) {
-  return date.toLocaleDateString(
-    'en-US',
-    {
-      month: 'long',
-      day: 'numeric'
-    }
-  );
-}
-
-function getDateKey(date) {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0')
-  ].join('-');
-}
-
-function getDateRange(data) {
-  const start = data?.startDate
-    ? new Date(data.startDate)
-    : null;
-
-  const end = data?.endDate
-    ? new Date(data.endDate)
-    : null;
-
-  if (
-    start &&
-    !Number.isNaN(start.getTime()) &&
-    end &&
-    !Number.isNaN(end.getTime())
-  ) {
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-
-    return {
-      start,
-      end
-    };
-  }
-
-  return null;
-}
-
-function buildContinuousDates(
-  schedules,
-  data
-) {
-  const range = getDateRange(data);
-
-  if (!range) {
-    return [];
-  }
-
-  const dates = [];
-
-  for (
-    let date = new Date(range.start);
-    date <= range.end;
-    date = addDays(date, 1)
-  ) {
-    dates.push(new Date(date));
-  }
-
-  return dates.filter(date => {
-    const lessons = resolveScheduleForDate(
-      schedules,
-      date,
-      data?.currentWeek,
-      1
+function savePersonalEvents(events) {
+  try {
+    localStorage.setItem(
+      PERSONAL_EVENTS_KEY,
+      JSON.stringify(events)
     );
-
-    return Array.isArray(lessons)
-      ? lessons.length > 0
-      : Boolean(lessons);
-  });
-}
-
-function personalDay(date) {
-  const day = date.getDay();
-
-  if (day === 1) return 'Mon';
-  if (day === 2) return 'Tue';
-  if (day === 3) return 'Wed';
-  if (day === 4) return 'Thu';
-  if (day === 5) return 'Fri';
-  if (day === 6) return 'Sat';
-
-  return 'Sun';
+  } catch (error) {
+    console.error(
+      'Failed to save personal events:',
+      error
+    );
+  }
 }
 
 function formatExamDate(value) {
@@ -195,7 +170,11 @@ function formatExamDate(value) {
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
     return value;
   }
 
@@ -209,37 +188,41 @@ function formatExamDate(value) {
   );
 }
 
-function getDayRelativity(date, now) {
-  if (sameDate(date, now)) {
-    return 'today';
-  }
-
-  return date < now
-    ? 'past'
-    : 'future';
-}
-
-function getDaySubtitle(
+function getLessonStatus(
+  lesson,
   date,
   now
 ) {
-  if (sameDate(date, now)) {
-    return 'Today';
+  if (
+    !sameDate(
+      date,
+      now
+    )
+  ) {
+    return date < now
+      ? 'past'
+      : 'upcoming';
   }
 
-  const yesterday = addDays(now, -1);
+  const status =
+    getClassStatus(
+      lesson.time,
+      now
+    );
 
-  if (sameDate(date, yesterday)) {
-    return 'Yesterday';
+  if (
+    status === 'current'
+  ) {
+    return 'in_progress';
   }
 
-  const tomorrow = addDays(now, 1);
-
-  if (sameDate(date, tomorrow)) {
-    return 'Tomorrow';
+  if (
+    status === 'finished'
+  ) {
+    return 'past';
   }
 
-  return '';
+  return 'upcoming';
 }
 
 export default function ScheduleView({
@@ -250,14 +233,20 @@ export default function ScheduleView({
   onLessonClick,
   onGroupChange
 }) {
-  const [now, setNow] = useState(
-    () => new Date()
-  );
+  const [now, setNow] =
+    useState(
+      () => new Date()
+    );
 
   const [
     selectedDate,
     setSelectedDate
-  ] = useState(initialDate);
+  ] = useState(
+    () =>
+      startOfDay(
+        new Date()
+      )
+  );
 
   const [
     selectedLesson,
@@ -297,170 +286,159 @@ export default function ScheduleView({
   const [
     personalEvents,
     setPersonalEvents
-  ] = useState(readPersonalEvents);
+  ] = useState(
+    readPersonalEvents
+  );
 
-  const scheduleListRef = useRef(null);
+  const scheduleListRef =
+    useRef(null);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 5000);
+    const interval =
+      setInterval(() => {
+        setNow(
+          new Date()
+        );
+      }, 5000);
 
-    return () => {
-      clearInterval(timer);
-    };
+    return () =>
+      clearInterval(
+        interval
+      );
   }, []);
 
-  const data = useMemo(
-    () => getScheduleData(scheduleData),
-    [scheduleData]
-  );
-
   const schedules =
-    data?.schedules &&
-    typeof data.schedules === 'object'
-      ? data.schedules
+    scheduleData?.schedules &&
+    typeof scheduleData.schedules ===
+      'object'
+      ? scheduleData.schedules
       : {};
 
-  const exams = Array.isArray(data?.exams)
-    ? data.exams
-    : [];
-
   const currentWeek =
-    Number(data?.currentWeek) >= 1 &&
-    Number(data?.currentWeek) <= 4
-      ? Number(data.currentWeek)
-      : 1;
+    Number(
+      scheduleData?.currentWeek
+    ) || 1;
 
-  const hasScheduleData =
-    hasLessons(schedules);
+  const exams =
+    Array.isArray(
+      scheduleData?.exams
+    )
+      ? scheduleData.exams
+      : [];
 
-  const continuousDates = useMemo(
-    () =>
-      buildContinuousDates(
-        schedules,
-        data
-      ),
-    [
-      schedules,
-      data
-    ]
-  );
+  /*
+   * Swift's continuous schedule starts
+   * around the current date and loads real
+   * schedule days incrementally.
+   *
+   * The web resolver is already responsible
+   * for academic-week and date matching.
+   */
+  const continuousDates =
+    useMemo(() => {
+      const today =
+        startOfDay(now);
 
-  const daySections = useMemo(
-    () =>
-      continuousDates.map(date => {
-        const lessons =
-          resolveLessonsForDate(
-            schedules,
-            date,
-            currentWeek,
-            subgroup,
-            {
-              referenceDate: now
-            }
-          );
+      return Array.from(
+        {
+          length:
+            CONTINUOUS_DAYS
+      },
+        (_, index) =>
+          addDays(
+            today,
+            index - 1
+          )
+      );
+    }, [now]);
 
-        const dayEvents =
-          personalEvents.filter(
-            event =>
-              event?.day ===
-              personalDay(date)
-          );
+  const daySections =
+    useMemo(() => {
+      return continuousDates
+        .map(date => {
+          const lessons =
+            resolveLessonsForDate(
+              schedules,
+              date,
+              currentWeek,
+              subgroup,
+              {
+                referenceDate: now
+              }
+            );
 
-        const combined = [
-          ...(Array.isArray(lessons)
-            ? lessons
-            : []),
-          ...dayEvents
-        ].sort(
-          (a, b) =>
-            parseStartTimeInMinutes(
-              a.time
-            ) -
-            parseStartTimeInMinutes(
-              b.time
-            )
-        );
+          const personal =
+            personalEvents.filter(
+              event =>
+                event?.day ===
+                getPersonalDay(
+                  date
+                )
+            );
 
-        let nextFound = false;
+          const lessonItems =
+            Array.isArray(lessons)
+              ? lessons.map(
+                  lesson => ({
+                    ...lesson,
+                    status:
+                      getLessonStatus(
+                        lesson,
+                        date,
+                        now
+                      )
+                  })
+                )
+              : [];
 
-        const items = combined.map(
-          item => {
-            if (item.isPersonal) {
-              return {
-                ...item,
-                status: 'upcoming'
-              };
-            }
-
-            const rawStatus =
-              sameDate(date, now)
-                ? getClassStatus(
-                    item.time,
-                    now
-                  )
-                : getDayRelativity(
+          const items = [
+            ...lessonItems,
+            ...personal.map(
+              event => ({
+                ...event,
+                status:
+                  sameDate(
                     date,
                     now
-                  ) === 'past'
-                  ? 'finished'
-                  : 'upcoming';
+                  )
+                    ? 'upcoming'
+                    : date < now
+                      ? 'past'
+                      : 'upcoming'
+              })
+            )
+          ].sort(
+            (a, b) =>
+              parseStartTimeInMinutes(
+                a.time
+              ) -
+              parseStartTimeInMinutes(
+                b.time
+              )
+          );
 
-            let status = rawStatus;
-
-            if (
-              sameDate(date, now) &&
-              rawStatus === 'upcoming' &&
-              !nextFound
-            ) {
-              status = 'next';
-              nextFound = true;
-            }
-
-            if (
-              rawStatus === 'current'
-            ) {
-              status = 'in_progress';
-            }
-
-            if (
-              rawStatus === 'finished'
-            ) {
-              status = 'past';
-            }
-
-            return {
-              ...item,
-              status
-            };
-          }
+          return {
+            date,
+            dateKey:
+              getDateKey(
+                date
+              ),
+            items
+          };
+        })
+        .filter(
+          section =>
+            section.items
+              .length > 0
         );
-
-        return {
-          date,
-          dateKey: getDateKey(date),
-          title: formatDateTitle(date),
-          subtitle: getDaySubtitle(
-            date,
-            now
-          ),
-          relativity: getDayRelativity(
-            date,
-            now
-          ),
-          items
-        };
-      }),
-    [
+    }, [
       continuousDates,
       schedules,
       currentWeek,
       subgroup,
       personalEvents,
       now
-    ]
-  );
+    ]);
 
   const selectedDayLessons =
     useMemo(
@@ -483,29 +461,44 @@ export default function ScheduleView({
       ]
     );
 
-  const selectedDayEvents =
-    useMemo(() => {
-      const day =
-        personalDay(selectedDate);
+  const selectedDayPersonal =
+    useMemo(
+      () =>
+        personalEvents.filter(
+          event =>
+            event?.day ===
+            getPersonalDay(
+              selectedDate
+            )
+        ),
+      [
+        personalEvents,
+        selectedDate
+      ]
+    );
 
-      return personalEvents.filter(
-        event =>
-          event?.day === day
-      );
-    }, [
-      personalEvents,
-      selectedDate
-    ]);
-
-  const selectedSchedule =
+  const selectedDayItems =
     useMemo(() => {
-      const combined = [
-        ...(Array.isArray(
+      const lessons =
+        Array.isArray(
           selectedDayLessons
         )
-          ? selectedDayLessons
-          : []),
-        ...selectedDayEvents
+          ? selectedDayLessons.map(
+              lesson => ({
+                ...lesson,
+                status:
+                  getLessonStatus(
+                    lesson,
+                    selectedDate,
+                    now
+                  )
+              })
+            )
+          : [];
+
+      return [
+        ...lessons,
+        ...selectedDayPersonal
       ].sort(
         (a, b) =>
           parseStartTimeInMinutes(
@@ -515,57 +508,9 @@ export default function ScheduleView({
             b.time
           )
       );
-
-      let nextFound = false;
-
-      return combined.map(item => {
-        if (item.isPersonal) {
-          return {
-            ...item,
-            status: 'upcoming'
-          };
-        }
-
-        const rawStatus =
-          getClassStatus(
-            item.time,
-            now
-          );
-
-        let status = rawStatus;
-
-        if (
-          sameDate(
-            selectedDate,
-            now
-          ) &&
-          rawStatus === 'upcoming' &&
-          !nextFound
-        ) {
-          status = 'next';
-          nextFound = true;
-        }
-
-        if (
-          rawStatus === 'current'
-        ) {
-          status = 'in_progress';
-        }
-
-        if (
-          rawStatus === 'finished'
-        ) {
-          status = 'past';
-        }
-
-        return {
-          ...item,
-          status
-        };
-      });
     }, [
       selectedDayLessons,
-      selectedDayEvents,
+      selectedDayPersonal,
       selectedDate,
       now
     ]);
@@ -574,112 +519,37 @@ export default function ScheduleView({
     action => {
       setActiveAction(action);
 
-      if (action === 'days') {
-        requestAnimationFrame(() => {
-          scheduleListRef.current?.scrollIntoView(
-            {
-              behavior: 'smooth',
-              block: 'start'
-            }
-          );
-        });
+      if (
+        action === 'days'
+      ) {
+        requestAnimationFrame(
+          () => {
+            scheduleListRef.current?.scrollIntoView(
+              {
+                behavior:
+                  'smooth',
+                block:
+                  'start'
+              }
+            );
+          }
+        );
       }
     };
 
-  const selectDate = date => {
-    setSelectedDate(
-      new Date(date)
-    );
+  const handleDateSelect =
+    date => {
+      const nextDate =
+        startOfDay(
+          new Date(date)
+        );
 
-    setActiveAction(
-      'calendar'
-    );
-  };
-
-  const openCreateModal = () => {
-    setEditingEvent(null);
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = event => {
-    setEditingEvent(event);
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditingEvent(null);
-  };
-
-  const saveEvent = event => {
-    const exists =
-      personalEvents.some(
-        item =>
-          item.id === event.id
+      setSelectedDate(
+        nextDate
       );
 
-    const updated = exists
-      ? personalEvents.map(item =>
-          item.id === event.id
-            ? event
-            : item
-        )
-      : [
-          ...personalEvents,
-          event
-        ];
-
-    setPersonalEvents(updated);
-
-    try {
-      localStorage.setItem(
-        PERSONAL_EVENTS_KEY,
-        JSON.stringify(updated)
-      );
-    } catch (error) {
-      console.error(
-        'Failed to save personal events:',
-        error
-      );
-    }
-
-    closeModal();
-  };
-
-  const deleteEvent = eventId => {
-    const updated =
-      personalEvents.filter(
-        event =>
-          event.id !== eventId
-      );
-
-    setPersonalEvents(updated);
-
-    try {
-      localStorage.setItem(
-        PERSONAL_EVENTS_KEY,
-        JSON.stringify(updated)
-      );
-    } catch (error) {
-      console.error(
-        'Failed to delete personal event:',
-        error
-      );
-    }
-  };
-
-  const handleGroupChange =
-    selectedGroup => {
-      onGroupChange?.(
-        selectedGroup
-      );
-
-      setIsGroupSelectorOpen(
-        false
-      );
-
-      setIsGroupBrowserOpen(
-        false
+      setActiveAction(
+        'calendar'
       );
     };
 
@@ -694,125 +564,236 @@ export default function ScheduleView({
       );
     };
 
-  const renderContinuousView =
+  const handleGroupChange =
+    nextGroup => {
+      const normalized =
+        String(
+          nextGroup || ''
+        ).trim();
+
+      if (!normalized) {
+        return;
+      }
+
+      onGroupChange?.(
+        normalized
+      );
+
+      setIsGroupSelectorOpen(
+        false
+      );
+
+      setIsGroupBrowserOpen(
+        false
+      );
+    };
+
+  const openCreateEvent =
+    () => {
+      setEditingEvent(null);
+      setIsModalOpen(true);
+    };
+
+  const openEditEvent =
+    event => {
+      setEditingEvent(
+        event
+      );
+      setIsModalOpen(true);
+    };
+
+  const closeEventModal =
+    () => {
+      setIsModalOpen(false);
+      setEditingEvent(null);
+    };
+
+  const handleSaveEvent =
+    event => {
+      const exists =
+        personalEvents.some(
+          item =>
+            item.id ===
+            event.id
+        );
+
+      const updated =
+        exists
+          ? personalEvents.map(
+              item =>
+                item.id ===
+                event.id
+                  ? event
+                  : item
+            )
+          : [
+              ...personalEvents,
+              event
+            ];
+
+      setPersonalEvents(
+        updated
+      );
+
+      savePersonalEvents(
+        updated
+      );
+
+      closeEventModal();
+    };
+
+  const handleDeleteEvent =
+    eventId => {
+      const updated =
+        personalEvents.filter(
+          event =>
+            event.id !==
+            eventId
+        );
+
+      setPersonalEvents(
+        updated
+      );
+
+      savePersonalEvents(
+        updated
+      );
+    };
+
+  const renderContinuous =
     () => (
       <div
         ref={scheduleListRef}
         className="space-y-6"
       >
         {daySections.map(
-          section => (
-            <section
-              key={
-                section.dateKey
-              }
-              className="scroll-mt-4"
-            >
-              <div className="mb-2 px-1">
-                <div className="flex items-baseline gap-2">
-                  <h2
-                    className={`text-base font-bold ${
-                      section.relativity ===
-                      'past'
-                        ? 'text-[var(--text-secondary)]'
-                        : 'text-[var(--text-primary)]'
-                    }`}
-                  >
-                    {formatMonthDay(
+          section => {
+            const isToday =
+              sameDate(
+                section.date,
+                now
+              );
+
+            const relative =
+              getRelativeLabel(
+                section.date,
+                now
+              );
+
+            return (
+              <section
+                key={
+                  section.dateKey
+                }
+                className="scroll-mt-4"
+              >
+                <div className="mb-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-[var(--text-primary)]">
+                      {formatDate(
+                        section.date
+                      )}
+                    </h2>
+
+                    {relative && (
+                      <span
+                        className={`text-[10px] font-semibold ${
+                          isToday
+                            ? 'text-[#2997ff]'
+                            : 'text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        {
+                          relative
+                        }
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-[var(--text-secondary)]">
+                    {getDayName(
                       section.date
                     )}
-                  </h2>
-
-                  {section.subtitle && (
-                    <span
-                      className={`text-[10px] font-semibold ${
-                        section.relativity ===
-                        'today'
-                          ? 'text-[#2997ff]'
-                          : 'text-[var(--text-secondary)]'
-                      }`}
-                    >
-                      {
-                        section.subtitle
-                      }
-                    </span>
-                  )}
+                  </p>
                 </div>
 
-                <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
-                  {section.date.toLocaleDateString(
-                    'en-US',
-                    {
-                      weekday:
-                        'long'
-                    }
-                  )}
-                </p>
-              </div>
-
-              <div className="overflow-hidden rounded-2xl bg-[var(--surface-glass)]">
-                {section.items.length >
-                0 ? (
-                  section.items.map(
-                    (item, index) => (
+                <div className="overflow-hidden rounded-2xl bg-[var(--surface-glass)]">
+                  {section.items.map(
+                    (
+                      item,
+                      index
+                    ) => (
                       <ScheduleLessonCard
                         key={
                           item.id ||
                           `${section.dateKey}-${index}`
                         }
-                        item={item}
+                        item={
+                          item
+                        }
                         now={now}
-                        index={index}
+                        index={
+                          index
+                        }
                         onLessonClick={
                           handleLessonClick
                         }
                         onEditPersonalEvent={
-                          openEditModal
+                          openEditEvent
                         }
                         onDeletePersonalEvent={
-                          deleteEvent
+                          handleDeleteEvent
                         }
                       />
                     )
-                  )
-                ) : (
-                  <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
-                    No classes
-                  </div>
-                )}
-              </div>
-            </section>
-          )
+                  )}
+                </div>
+              </section>
+            );
+          }
         )}
 
         {!loading &&
-          !hasScheduleData && (
+          daySections.length ===
+            0 && (
             <div className="rounded-2xl bg-[var(--surface-glass)] px-4 py-8 text-center">
               <p className="text-sm font-semibold text-[var(--text-primary)]">
-                No schedule available
+                No classes found
+              </p>
+
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                The schedule data is loaded,
+                but there are no classes in
+                the current date window.
               </p>
             </div>
           )}
       </div>
     );
 
-  const renderCalendarView =
+  const renderCalendar =
     () => (
       <ScheduleCalendar
-        selectedDate={selectedDate}
-        onSelectDate={
-          selectDate
+        selectedDate={
+          selectedDate
         }
-        schedules={schedules}
+        onSelectDate={
+          handleDateSelect
+        }
+        schedules={
+          schedules
+        }
         currentWeek={
           currentWeek
         }
-        subgroup={subgroup}
+        subgroup={
+          subgroup
+        }
         now={now}
       />
     );
 
-  const renderExamsView =
+  const renderExams =
     () => (
       <div className="space-y-3">
         {exams.length === 0 ? (
@@ -837,32 +818,30 @@ export default function ScheduleView({
                     'Exam'}
                 </h3>
 
-                <div className="mt-2 space-y-1 text-[11px] text-[var(--text-secondary)]">
-                  {exam.teacher && (
-                    <p>
-                      {
-                        exam.teacher
-                      }
-                    </p>
-                  )}
+                {exam.teacher && (
+                  <p className="mt-2 text-xs text-[var(--text-secondary)]">
+                    {
+                      exam.teacher
+                    }
+                  </p>
+                )}
 
-                  {exam.room && (
-                    <p>
-                      Room{' '}
-                      {
-                        exam.room
-                      }
-                    </p>
-                  )}
+                {exam.room && (
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                    Room{' '}
+                    {
+                      exam.room
+                    }
+                  </p>
+                )}
 
-                  {exam.date && (
-                    <p>
-                      {formatExamDate(
-                        exam.date
-                      )}
-                    </p>
-                  )}
-                </div>
+                {exam.date && (
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                    {formatExamDate(
+                      exam.date
+                    )}
+                  </p>
+                )}
               </div>
             )
           )
@@ -893,10 +872,7 @@ export default function ScheduleView({
                   'All groups'}
               </span>
 
-              <span
-                aria-hidden="true"
-                className="text-xs text-[var(--text-secondary)]"
-              >
+              <span className="text-xs text-[var(--text-secondary)]">
                 ▾
               </span>
             </button>
@@ -945,16 +921,30 @@ export default function ScheduleView({
 
         {activeAction ===
           'days' &&
-          renderContinuousView()}
+          renderContinuous()}
 
         {activeAction ===
           'calendar' &&
-          renderCalendarView()}
+          renderCalendar()}
 
         {activeAction ===
           'exams' &&
-          renderExamsView()}
+          renderExams()}
       </div>
+
+      {activeAction ===
+        'days' && (
+        <button
+          type="button"
+          onClick={
+            openCreateEvent
+          }
+          aria-label="Add personal event"
+          className="fixed bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#2997ff] text-2xl font-light text-white shadow-lg"
+        >
+          +
+        </button>
+      )}
 
       {selectedLesson && (
         <LessonDetailsSheet
@@ -993,19 +983,23 @@ export default function ScheduleView({
           event={
             editingEvent
           }
-          onSave={saveEvent}
+          onSave={
+            handleSaveEvent
+          }
           onDelete={
-            deleteEvent
+            handleDeleteEvent
           }
           onClose={
-            closeModal
+            closeEventModal
           }
         />
       )}
 
       {isGroupSelectorOpen && (
         <GroupSelectorSheet
-          group={group}
+          group={
+            group
+          }
           onSelect={
             handleGroupChange
           }
@@ -1031,20 +1025,6 @@ export default function ScheduleView({
             )
           }
         />
-      )}
-
-      {activeAction ===
-        'days' && (
-        <button
-          type="button"
-          onClick={
-            openCreateModal
-          }
-          className="fixed bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#2997ff] text-2xl font-light text-white shadow-lg"
-          aria-label="Add personal event"
-        >
-          +
-        </button>
       )}
     </>
   );
