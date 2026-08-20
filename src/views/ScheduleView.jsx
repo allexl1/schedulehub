@@ -24,6 +24,10 @@ import {
   getMoreContinuousSchedule
 } from '../utils/continuousSchedule';
 
+import {
+  getByDayScheduleForWeek
+} from '../utils/daySchedule';
+
 const PERSONAL_EVENTS_KEY =
   'sh_personal_events';
 
@@ -273,49 +277,6 @@ function getLessonStatus(
   return 'upcoming';
 }
 
-function getCompactSections(
-  loadedDays
-) {
-  const sections = new Map();
-
-  loadedDays.forEach(
-    section => {
-      const weekday =
-        section.date.getDay() ===
-        0
-          ? 7
-          : section.date.getDay();
-
-      if (
-        !sections.has(
-          weekday
-        )
-      ) {
-        sections.set(
-          weekday,
-          {
-            weekday,
-            date:
-              section.date,
-            weekNumber:
-              section.weekNumber,
-            lessons:
-              section.lessons
-          }
-        );
-      }
-    }
-  );
-
-  return Array.from(
-    sections.values()
-  ).sort(
-    (a, b) =>
-      a.weekday -
-      b.weekday
-  );
-}
-
 function SectionHeader({
   date,
   weekNumber,
@@ -377,6 +338,25 @@ function SectionHeader({
       </div>
 
       <p className="mt-0.5 text-[14px] font-medium text-[var(--text-secondary)]">
+        Week {weekNumber}
+      </p>
+    </div>
+  );
+}
+
+function CompactSectionHeader({
+  dayName,
+  weekNumber
+}) {
+  return (
+    <div className="mb-3 px-2">
+      <div className="flex items-center gap-2">
+        <h2 className="text-[20px] font-bold tracking-tight text-[var(--text-primary)]">
+          {dayName}
+        </h2>
+      </div>
+
+      <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">
         Week {weekNumber}
       </p>
     </div>
@@ -542,7 +522,9 @@ export default function ScheduleView({
         limit: 12
       });
 
-    setLoadedDays(days);
+    setLoadedDays(
+      days
+    );
   }, [
     scheduleReady,
     schedules,
@@ -574,7 +556,9 @@ export default function ScheduleView({
         return;
       }
 
-      setIsLoadingMore(true);
+      setIsLoadingMore(
+        true
+      );
 
       const moreDays =
         getMoreContinuousSchedule({
@@ -601,7 +585,9 @@ export default function ScheduleView({
         );
       }
 
-      setIsLoadingMore(false);
+      setIsLoadingMore(
+        false
+      );
     };
 
   useEffect(() => {
@@ -707,14 +693,54 @@ export default function ScheduleView({
       ]
     );
 
-  const compactSections =
-    useMemo(
-      () =>
-        getCompactSections(
-          daySections
-        ),
-      [daySections]
-    );
+  const byDaySections =
+    useMemo(() => {
+      if (
+        !scheduleReady
+      ) {
+        return [];
+      }
+
+      const days =
+        getByDayScheduleForWeek({
+          schedules,
+          startDate:
+            scheduleStartDate,
+          endDate:
+            scheduleEndDate,
+          referenceDate:
+            now,
+          subgroup,
+          weekNumber:
+            currentWeek
+        });
+
+      return days.map(
+        day => ({
+          ...day,
+          dayName:
+            day.key,
+          weekNumber:
+            currentWeek,
+          items:
+            day.lessons.map(
+              lesson => ({
+                ...lesson,
+                status:
+                  'upcoming'
+              })
+            )
+        })
+      );
+    }, [
+      scheduleReady,
+      schedules,
+      scheduleStartDate,
+      scheduleEndDate,
+      subgroup,
+      currentWeek,
+      now
+    ]);
 
   const isCurrentGroupFavorite =
     Boolean(
@@ -858,7 +884,9 @@ export default function ScheduleView({
         false
       );
 
-      setEditingEvent(null);
+      setEditingEvent(
+        null
+      );
     };
 
   const handleDeleteEvent =
@@ -881,8 +909,13 @@ export default function ScheduleView({
 
   const openCreateEvent =
     () => {
-      setEditingEvent(null);
-      setIsModalOpen(true);
+      setEditingEvent(
+        null
+      );
+
+      setIsModalOpen(
+        true
+      );
     };
 
   const openEditEvent =
@@ -891,29 +924,24 @@ export default function ScheduleView({
         event
       );
 
-      setIsModalOpen(true);
+      setIsModalOpen(
+        true
+      );
     };
 
-  const renderDaySections =
-    (
-      sections,
-      compact = false
-    ) => (
+  const renderContinuous =
+    () => (
       <div
         ref={
-          compact
-            ? undefined
-            : scheduleListRef
+          scheduleListRef
         }
         className="space-y-8"
       >
-        {sections.map(
+        {daySections.map(
           section => (
             <section
               key={
-                compact
-                  ? `compact-${section.weekday}`
-                  : section.dateKey
+                section.dateKey
               }
               className="scroll-mt-4"
             >
@@ -925,9 +953,6 @@ export default function ScheduleView({
                   section.weekNumber
                 }
                 now={now}
-                compact={
-                  compact
-                }
               />
 
               <div className="space-y-3">
@@ -939,7 +964,7 @@ export default function ScheduleView({
                     <ScheduleLessonCard
                       key={
                         item.id ||
-                        `${section.dateKey || section.weekday}-${index}`
+                        `${section.dateKey}-${index}`
                       }
                       item={item}
                       now={now}
@@ -963,7 +988,7 @@ export default function ScheduleView({
 
         {!loading &&
           scheduleReady &&
-          sections.length ===
+          daySections.length ===
             0 && (
             <div className="rounded-[16px] bg-[#f2f2f7] px-4 py-10 text-center">
               <p className="text-sm font-semibold text-[var(--text-primary)]">
@@ -976,9 +1001,8 @@ export default function ScheduleView({
             </div>
           )}
 
-        {!compact &&
-          scheduleReady &&
-          sections.length >
+        {scheduleReady &&
+          daySections.length >
             0 && (
             <div
               ref={
@@ -996,18 +1020,72 @@ export default function ScheduleView({
       </div>
     );
 
-  const renderContinuous =
-    () =>
-      renderDaySections(
-        daySections
-      );
+  const renderByDay =
+    () => (
+      <div className="space-y-8">
+        {byDaySections.map(
+          section => (
+            <section
+              key={
+                `by-day-${section.key}`
+              }
+            >
+              <CompactSectionHeader
+                dayName={
+                  section.dayName
+                }
+                weekNumber={
+                  section.weekNumber
+                }
+              />
 
-  const renderCompact =
-    () =>
-      renderDaySections(
-        compactSections,
-        true
-      );
+              <div className="space-y-3">
+                {section.items.map(
+                  (
+                    item,
+                    index
+                  ) => (
+                    <ScheduleLessonCard
+                      key={
+                        item.id ||
+                        `by-day-${section.key}-${index}`
+                      }
+                      item={item}
+                      now={now}
+                      index={index}
+                      onLessonClick={
+                        handleLessonClick
+                      }
+                      onEditPersonalEvent={
+                        openEditEvent
+                      }
+                      onDeletePersonalEvent={
+                        handleDeleteEvent
+                      }
+                    />
+                  )
+                )}
+              </div>
+            </section>
+          )
+        )}
+
+        {!loading &&
+          scheduleReady &&
+          byDaySections.length ===
+            0 && (
+            <div className="rounded-[16px] bg-[#f2f2f7] px-4 py-10 text-center">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                No classes
+              </p>
+
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                No recurring classes are available.
+              </p>
+            </div>
+          )}
+      </div>
+    );
 
   const renderCalendar =
     () => (
@@ -1045,7 +1123,10 @@ export default function ScheduleView({
           </div>
         ) : (
           exams.map(
-            (exam, index) => (
+            (
+              exam,
+              index
+            ) => (
               <div
                 key={
                   exam.id ||
@@ -1125,7 +1206,7 @@ export default function ScheduleView({
 
         {activeAction ===
           'compact' &&
-          renderCompact()}
+          renderByDay()}
 
         {activeAction ===
           'calendar' &&
@@ -1197,6 +1278,7 @@ export default function ScheduleView({
             setIsModalOpen(
               false
             );
+
             setEditingEvent(
               null
             );
