@@ -1,5 +1,4 @@
 import {
-  formatDateKey,
   resolveLessonsForDate
 } from './scheduleResolver';
 
@@ -179,17 +178,18 @@ function getLessonKey(
       lesson?.numSubgroup
     ) || 0;
 
-  const weeks = Array.isArray(
-    lesson?.weekNumber
-  )
-    ? lesson.weekNumber
-        .map(Number)
-        .sort()
-        .join(',')
-    : String(
-        lesson?.weekNumber ??
-          ''
-      );
+  const weeks =
+    Array.isArray(
+      lesson?.weekNumber
+    )
+      ? lesson.weekNumber
+          .map(Number)
+          .sort()
+          .join(',')
+      : String(
+          lesson?.weekNumber ??
+            ''
+        );
 
   return [
     subject,
@@ -232,13 +232,9 @@ function getCycleDates({
   let date =
     new Date(start);
 
-  const maximumDays =
-    28;
-
   while (
     date <= end &&
-    dates.length <
-      maximumDays
+    dates.length < 28
   ) {
     dates.push(
       new Date(date)
@@ -298,13 +294,14 @@ export function getByDaySchedule({
       endDate
     });
 
-  const days = DAYS.map(
-    day => ({
-      key: day.key,
-      weekday: day.index,
-      lessons: []
-    })
-  );
+  const days =
+    DAYS.map(
+      day => ({
+        key: day.key,
+        weekday: day.index,
+        lessons: []
+      })
+    );
 
   if (
     cycleDates.length === 0
@@ -423,9 +420,7 @@ export function getByDaySchedule({
 }
 
 export function getByDayScheduleForWeek(
-  options
-) {
-  const {
+  {
     schedules,
     startDate,
     endDate,
@@ -433,8 +428,8 @@ export function getByDayScheduleForWeek(
       new Date(),
     subgroup = 'all',
     weekNumber
-  } = options;
-
+  }
+) {
   const cycleDates =
     getCycleDates({
       startDate,
