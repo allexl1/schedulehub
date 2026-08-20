@@ -77,9 +77,9 @@ function formatDate(date) {
   return date.toLocaleDateString(
     'en-US',
     {
+      weekday: 'short',
       month: 'long',
-      day: 'numeric',
-      year: 'numeric'
+      day: 'numeric'
     }
   );
 }
@@ -336,20 +336,20 @@ function SectionHeader({
 
   if (compact) {
     return (
-      <div className="mb-3 px-1">
+      <div className="mb-3 px-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-bold text-[var(--text-primary)]">
+          <h2 className="text-[20px] font-bold tracking-tight text-[var(--text-primary)]">
             {getDayName(date)}
           </h2>
 
           {isToday && (
-            <span className="rounded-full bg-[#2997ff]/10 px-2 py-0.5 text-[9px] font-bold text-[#2997ff]">
+            <span className="text-[13px] font-semibold text-[#007aff]">
               Today
             </span>
           )}
         </div>
 
-        <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+        <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">
           Week {weekNumber}
         </p>
       </div>
@@ -357,12 +357,12 @@ function SectionHeader({
   }
 
   return (
-    <div className="mb-3 px-1">
-      <div className="flex items-center gap-2">
+    <div className="mb-3 px-2">
+      <div className="flex items-baseline gap-2">
         <h2
-          className={`text-base font-bold ${
+          className={`text-[21px] font-bold tracking-tight ${
             isToday
-              ? 'text-[#2997ff]'
+              ? 'text-[#007aff]'
               : 'text-[var(--text-primary)]'
           }`}
         >
@@ -370,31 +370,15 @@ function SectionHeader({
         </h2>
 
         {relative && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-              isToday
-                ? 'bg-[#2997ff]/10 text-[#2997ff]'
-                : 'bg-[var(--surface-glass)] text-[var(--text-secondary)]'
-            }`}
-          >
+          <span className="text-[13px] font-semibold text-[#007aff]">
             {relative}
           </span>
         )}
       </div>
 
-      <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--text-secondary)]">
-        <span>
-          {getDayName(date)}
-        </span>
-
-        <span aria-hidden="true">
-          •
-        </span>
-
-        <span>
-          Week {weekNumber}
-        </span>
-      </div>
+      <p className="mt-0.5 text-[14px] font-medium text-[var(--text-secondary)]">
+        Week {weekNumber}
+      </p>
     </div>
   );
 }
@@ -404,7 +388,6 @@ export default function ScheduleView({
   group,
   subgroup = 1,
   loading = false,
-  onLessonClick,
   onGroupChange
 }) {
   const [
@@ -814,10 +797,6 @@ export default function ScheduleView({
       setSelectedLesson(
         lesson
       );
-
-      onLessonClick?.(
-        lesson
-      );
     };
 
   const handleGroupChange =
@@ -926,7 +905,7 @@ export default function ScheduleView({
             ? undefined
             : scheduleListRef
         }
-        className="space-y-7"
+        className="space-y-8"
       >
         {sections.map(
           section => (
@@ -951,7 +930,7 @@ export default function ScheduleView({
                 }
               />
 
-              <div className="overflow-hidden rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass)]">
+              <div className="space-y-3">
                 {section.items.map(
                   (
                     item,
@@ -986,7 +965,7 @@ export default function ScheduleView({
           scheduleReady &&
           sections.length ===
             0 && (
-            <div className="rounded-2xl bg-[var(--surface-glass)] px-4 py-10 text-center">
+            <div className="rounded-[16px] bg-[#f2f2f7] px-4 py-10 text-center">
               <p className="text-sm font-semibold text-[var(--text-primary)]">
                 No classes
               </p>
@@ -1059,7 +1038,7 @@ export default function ScheduleView({
       <div className="space-y-3">
         {exams.length ===
         0 ? (
-          <div className="rounded-2xl bg-[var(--surface-glass)] px-4 py-10 text-center">
+          <div className="rounded-[16px] bg-[#f2f2f7] px-4 py-10 text-center">
             <p className="text-sm font-semibold text-[var(--text-primary)]">
               No exams
             </p>
@@ -1072,16 +1051,16 @@ export default function ScheduleView({
                   exam.id ||
                   `${exam.date}-${index}`
                 }
-                className="rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass)] p-4"
+                className="rounded-[16px] bg-[#f2f2f7] p-4"
               >
-                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                <h3 className="text-[17px] font-bold text-[var(--text-primary)]">
                   {exam.subject ||
                     exam.name ||
                     'Exam'}
                 </h3>
 
                 {exam.teacher && (
-                  <p className="mt-2 text-xs text-[var(--text-secondary)]">
+                  <p className="mt-2 text-sm text-[var(--text-secondary)]">
                     {
                       exam.teacher
                     }
@@ -1089,7 +1068,7 @@ export default function ScheduleView({
                 )}
 
                 {exam.room && (
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
                     Room{' '}
                     {
                       exam.room
@@ -1098,7 +1077,7 @@ export default function ScheduleView({
                 )}
 
                 {exam.date && (
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
                     {formatExamDate(
                       exam.date
                     )}
@@ -1113,86 +1092,32 @@ export default function ScheduleView({
 
   return (
     <>
-      <div className="space-y-5">
-        <header className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[var(--text-secondary)]">
-                Schedule
-              </p>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setIsGroupSelectorOpen(
-                    true
-                  )
-                }
-                className="mt-1 flex max-w-full items-center gap-2 text-left"
-              >
-                <span className="truncate text-xl font-extrabold text-[var(--text-primary)]">
-                  {group ||
-                    'All groups'}
-                </span>
-
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="h-4 w-4 shrink-0 text-[var(--text-secondary)]"
-                  aria-hidden="true"
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                setIsGroupBrowserOpen(
-                  true
-                )
-              }
-              aria-label="Browse groups"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-glass)] text-[var(--text-secondary)] transition-transform active:scale-95"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                className="h-5 w-5"
-                aria-hidden="true"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle
-                  cx="9"
-                  cy="7"
-                  r="4"
-                />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </button>
-          </div>
-
-          <ScheduleToolbar
-            activeAction={
-              activeAction
-            }
-            onAction={
-              handleToolbarAction
-            }
-            isFavorite={
-              isCurrentGroupFavorite
-            }
-            onToggleFavorite={
-              handleToggleFavorite
-            }
-          />
-        </header>
+      <div className="space-y-6">
+        <ScheduleToolbar
+          group={group}
+          activeAction={
+            activeAction
+          }
+          onAction={
+            handleToolbarAction
+          }
+          onOpenGroupSelector={() =>
+            setIsGroupSelectorOpen(
+              true
+            )
+          }
+          onOpenGroupBrowser={() =>
+            setIsGroupBrowserOpen(
+              true
+            )
+          }
+          isFavorite={
+            isCurrentGroupFavorite
+          }
+          onToggleFavorite={
+            handleToggleFavorite
+          }
+        />
 
         {activeAction ===
           'continuous' &&
@@ -1219,7 +1144,7 @@ export default function ScheduleView({
             openCreateEvent
           }
           aria-label="Add personal event"
-          className="fixed bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#2997ff] text-2xl font-light text-white shadow-lg transition-transform active:scale-95"
+          className="fixed bottom-20 right-5 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-[#007aff] text-2xl font-light text-white shadow-lg transition-transform active:scale-95"
         >
           +
         </button>
