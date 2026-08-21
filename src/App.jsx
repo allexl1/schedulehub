@@ -35,10 +35,14 @@ function AppContent() {
     () => localStorage.getItem('sh_group') || ''
   );
 
-  const [subgroup, setSubgroup] = useState(
-    () =>
-      Number(localStorage.getItem('sh_subgroup')) || 1
-  );
+  const [subgroup, setSubgroup] = useState(() => {
+  const saved =
+    localStorage.getItem('sh_subgroup');
+
+  return ['1', '2', 'all'].includes(saved)
+    ? saved
+    : '1';
+});
 
   const [themeMode, setThemeMode] = useState(
     () =>
@@ -79,7 +83,11 @@ function AppContent() {
       String(newGroup || '').trim();
 
     const normalizedSubgroup =
-      Number(newSubgroup) || 1;
+  ['1', '2', 'all'].includes(
+    String(newSubgroup)
+  )
+    ? String(newSubgroup)
+    : '1';
 
     if (!normalizedGroup) {
       return;
