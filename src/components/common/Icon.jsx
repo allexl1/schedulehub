@@ -24,27 +24,27 @@ const icons = {
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth={1.8}
-      d="M8 21v-2a4 4 0 0 1 8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+      d="M4 19V5h16v14M8 9h8M8 13h5M8 17h3"
     />
   ),
 
   lessonPractice: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.8}
-      d="m14.5 5.5 4 4M13 7l4 4m-7.5 6.5L4 13l5-5 4 4-5 5ZM3 21l3.5-1.5L5 18l-2 3Zm11-7 3-3"
-    />
-  ),
+  <path
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth={1.8}
+    d="M5 19h14M7 16V8l5-4 5 4v8M9 16v-4h6v4"
+  />
+),
 
   lessonLab: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.8}
-      d="M3 19V5m0 14h18M6 15l4-4 3 2 5-6"
-    />
-  ),
+  <path
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth={1.8}
+    d="M9 3h6M10 3v6.5L5 19h14l-5-9.5V3M8 15h8"
+  />
+),
 
   lessonConsultation: (
     <path
@@ -128,13 +128,13 @@ const icons = {
   ),
 
   settings: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.8}
-      d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0-12v1.2m0 14.6v1.2M4.58 4.58l.85.85m13.14 13.14.85.85M1.5 12h1.2m18.6 0h1.2M4.58 19.42l.85-.85M18.57 5.43l.85-.85M19.07 8.1l.92-.53-1.4-2.43-.92.53a8.5 8.5 0 0 0-2.2-1.27V3.35h-2.8v1.05a8.5 8.5 0 0 0-2.2 1.27l-.92-.53-1.4 2.43.92.53a8.5 8.5 0 0 0 0 2.54l-.92.53 1.4 2.43.92-.53a8.5 8.5 0 0 0 2.2-1.27v1.05h2.8v-1.05a8.5 8.5 0 0 0 2.2-1.27l.92.53a8.5 8.5 0 0 0 1.4-2.43l-.92-.53a8.5 8.5 0 0 0 0-2.54Z"
-    />
-  ),
+  <path
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth={1.8}
+    d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.42 1.42-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2v-.48a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.42-1.42.06-.06A1.7 1.7 0 0 0 9.4 15a1.7 1.7 0 0 0-1.56-1.03H7.35v-2h.49A1.7 1.7 0 0 0 9.4 10.94a1.7 1.7 0 0 0-.34-1.88L9 9l1.42-1.42.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 13.39 6.4V6h2v.4a1.7 1.7 0 0 0 1.03 1.58 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.78 9l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 12h.49v2h-.49A1.7 1.7 0 0 0 19.4 15Z"
+  />
+),
 
   search: (
     <path
