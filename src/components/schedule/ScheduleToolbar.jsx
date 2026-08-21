@@ -219,7 +219,7 @@ export default function ScheduleToolbar({
     }
   >
     <Icon
-      name="user"
+      name="subgroup"
       className="h-6 w-6"
       strokeWidth={1.9}
     />
