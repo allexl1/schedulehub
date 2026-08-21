@@ -32,8 +32,9 @@ export function useSchedule({
     useState(() =>
       normalizedGroup
         ? readCachedSchedule(
-            normalizedGroup
-          ) || {
+  normalizedGroup,
+  normalizedSubgroup
+) || {
             ...EMPTY_DATA
           }
         : {
@@ -55,8 +56,9 @@ export function useSchedule({
     useState(() =>
       normalizedGroup
         ? readCacheTimestamp(
-            normalizedGroup
-          )
+  normalizedGroup,
+  normalizedSubgroup
+)
         : null
     );
 
@@ -94,8 +96,9 @@ export function useSchedule({
        */
       const cached =
         readCachedSchedule(
-          normalizedGroup
-        );
+  normalizedGroup,
+  normalizedSubgroup
+);
 
       if (cancelled) {
         return;
@@ -106,8 +109,9 @@ export function useSchedule({
 
         setLastUpdated(
           readCacheTimestamp(
-            normalizedGroup
-          )
+  normalizedGroup,
+  normalizedSubgroup
+)
         );
       } else {
         setScheduleData({
