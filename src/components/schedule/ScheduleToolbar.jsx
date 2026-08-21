@@ -35,6 +35,7 @@ export default function ScheduleToolbar({
   onOpenGroupBrowser,
   onOpenSubgroupSelector,
   isFavorite = false,
+  onSubgroupChange,
   onToggleFavorite
 }) {
   const [
@@ -46,6 +47,11 @@ export default function ScheduleToolbar({
     isFavoriteMenuOpen,
     setIsFavoriteMenuOpen
   ] = useState(false);
+  
+  const [
+  isSubgroupMenuOpen,
+  setIsSubgroupMenuOpen
+] = useState(false);
 
   const handleDisplayMenu = () => {
     setIsFavoriteMenuOpen(false);
@@ -196,20 +202,86 @@ export default function ScheduleToolbar({
             )}
           </div>
 
+<div className="relative">
+  <button
+    type="button"
+    onClick={() => {
+      setIsDisplayMenuOpen(false);
+      setIsFavoriteMenuOpen(false);
+      setIsSubgroupMenuOpen(
+        current => !current
+      );
+    }}
+    className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-primary)] transition-opacity active:opacity-60"
+    aria-label="Select subgroup"
+    aria-expanded={
+      isSubgroupMenuOpen
+    }
+  >
+    <Icon
+      name="user"
+      className="h-6 w-6"
+      strokeWidth={1.9}
+    />
+  </button>
+
+  {isSubgroupMenuOpen && (
+    <div className="absolute right-0 top-11 z-30 w-48 overflow-hidden rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass)] p-1.5 shadow-xl backdrop-blur-xl">
+      {[
+        {
+          value: 'all',
+          label: 'All subgroups'
+        },
+        {
+          value: '1',
+          label: 'Subgroup 1'
+        },
+        {
+          value: '2',
+          label: 'Subgroup 2'
+        }
+      ].map(option => {
+        const active =
+          String(
+            subgroup
+          ) === option.value;
+
+        return (
           <button
-            type="button"
-            onClick={
-              onOpenSubgroupSelector
+            key={
+              option.value
             }
-            className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-primary)] transition-opacity active:opacity-60"
-            aria-label="Select subgroup"
+            type="button"
+            onClick={() => {
+              setIsSubgroupMenuOpen(
+                false
+              );
+
+              onSubgroupChange?.(
+                option.value
+              );
+            }}
+            className={`flex w-full items-center rounded-xl px-3 py-2.5 text-left transition-colors ${
+              active
+                ? 'bg-[#007aff]/10 text-[#007aff]'
+                : 'text-[var(--text-primary)] active:bg-black/5'
+            }`}
           >
-            <Icon
-              name="user"
-              className="h-6 w-6"
-              strokeWidth={1.9}
-            />
+            <span className="text-sm font-medium">
+              {option.label}
+            </span>
+
+            {active && (
+              <span className="ml-auto text-sm font-semibold">
+                ✓
+              </span>
+            )}
           </button>
+        );
+      })}
+    </div>
+  )}
+</div>
 
           <div className="relative">
             <button
