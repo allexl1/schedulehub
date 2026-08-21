@@ -19,8 +19,13 @@ export function useSchedule({
   const normalizedGroup =
     String(group || '').trim();
 
-  const normalizedSubgroup =
-    Number(subgroup) || 1;
+  const normalizedSubgroup = [
+  '1',
+  '2',
+  'all'
+].includes(String(subgroup))
+  ? String(subgroup)
+  : '1';
 
 
   const [scheduleData, setScheduleData] =
