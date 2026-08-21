@@ -366,7 +366,7 @@ function CompactSectionHeader({
 export default function ScheduleView({
   scheduleData,
   group,
-  subgroup = 1,
+  subgroup = '1',
   loading = false,
   onGroupChange,
   onSubgroupChange
@@ -1199,9 +1199,10 @@ export default function ScheduleView({
           onToggleFavorite={
             handleToggleFavorite
           }
-          onSubgroupChange={
+          subgroup={subgroup}
+onSubgroupChange={
   onSubgroupChange
-  }
+}
         />
 
         {activeAction ===
