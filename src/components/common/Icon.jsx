@@ -18,6 +18,69 @@ const icons = {
       d="M8 3v4M16 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm3 8h2m2 0h2m-6 4h2m2 0h2"
     />
   ),
+  
+    lessonLecture: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.8}
+      d="M8 21v-2a4 4 0 0 1 8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+    />
+  ),
+
+  lessonPractice: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.8}
+      d="m14.5 5.5 4 4M13 7l4 4m-7.5 6.5L4 13l5-5 4 4-5 5ZM3 21l3.5-1.5L5 18l-2 3Zm11-7 3-3"
+    />
+  ),
+
+  lessonLab: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.8}
+      d="M3 19V5m0 14h18M6 15l4-4 3 2 5-6"
+    />
+  ),
+
+  lessonConsultation: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.8}
+      d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3 4h4m-4 4h4m-4 4h2"
+    />
+  ),
+
+  lessonExam: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.8}
+      d="m4 7 8-4 8 4-8 4-8-4Zm3 3v5c0 1.5 2.2 3 5 3s5-1.5 5-3v-5M20 8v7"
+    />
+  ),
+
+  lessonTest: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.8}
+      d="m5 19 3-3m0 0 9-9m-9 9 4 1 5-5-4-4-5 5 1 4Zm8-11 2-2 4 4-2 2"
+    />
+  ),
+
+  lessonUnknown: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.8}
+      d="M9.5 9a2.5 2.5 0 1 1 4.7 1.2c-.7 1.1-2.2 1.4-2.2 3.3M12 17.5h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z"
+    />
+  ),
 
   list: (
     <path
