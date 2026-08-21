@@ -265,7 +265,7 @@ function AppContent() {
   loading={loading}
   onLessonClick={setSelectedLesson}
   onGroupChange={handleGroupChange}
-  onSubgroupChange={setSubgroup}
+  onSubgroupChange={handleSubgroupChange}
 />
         )}
 
