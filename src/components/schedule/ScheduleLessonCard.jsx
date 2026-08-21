@@ -73,9 +73,7 @@ function normalizeLessonForm(item) {
     return 'lab';
   }
 
-  if (
-    value.includes('консульта')
-  ) {
+  if (value.includes('консульта')) {
     return 'consultation';
   }
 
@@ -118,21 +116,6 @@ function getLessonTime(item) {
   };
 }
 
-function getTeacherPhoto(item) {
-  if (
-    !Array.isArray(
-      item?.employees
-    )
-  ) {
-    return '';
-  }
-
-  return (
-    item.employees[0]
-      ?.photoLink || ''
-  );
-}
-
 function getSubgroup(item) {
   const value =
     item?.numSubgroup ??
@@ -142,15 +125,33 @@ function getSubgroup(item) {
     Number(value);
 
   if (
-    !Number.isInteger(
-      subgroup
-    ) ||
+    !Number.isInteger(subgroup) ||
     subgroup === 0
   ) {
     return null;
   }
 
   return subgroup;
+}
+
+function getWeeks(item) {
+  if (
+    Array.isArray(item?.weekNumber)
+  ) {
+    return item.weekNumber
+      .filter(
+        week =>
+          Number.isInteger(
+            Number(week)
+          ) &&
+          Number(week) >= 1 &&
+          Number(week) <= 4
+      )
+      .map(Number)
+      .join(', ');
+  }
+
+  return '';
 }
 
 export default function ScheduleLessonCard({
@@ -165,8 +166,7 @@ export default function ScheduleLessonCard({
     item.status === 'past';
 
   const current =
-    item.status ===
-    'in_progress';
+    item.status === 'in_progress';
 
   const time =
     getLessonTime(item);
@@ -188,8 +188,8 @@ export default function ScheduleLessonCard({
   const subgroup =
     getSubgroup(item);
 
-  const teacherPhoto =
-    getTeacherPhoto(item);
+  const weeks =
+    getWeeks(item);
 
   const handleLessonClick =
     () => {
@@ -222,18 +222,18 @@ export default function ScheduleLessonCard({
     return (
       <div
         data-index={index}
-        className="rounded-2xl bg-[#f2f2f7] px-4 py-3 text-[var(--text-primary)]"
+        className="rounded-lg bg-[var(--surface-secondary)] px-3 py-2.5 text-[var(--text-primary)]"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[15px] font-semibold">
+            <p className="truncate text-[15px] font-semibold">
               {item.subject ||
                 item.title ||
                 'Personal event'}
             </p>
 
             {time && (
-              <p className="mt-1 font-mono text-[13px] text-[#6b6b70]">
+              <p className="mt-0.5 font-mono text-[12px] text-[var(--text-secondary)]">
                 {time.start}
                 {time.end
                   ? `–${time.end}`
@@ -248,7 +248,7 @@ export default function ScheduleLessonCard({
               onClick={
                 handleEdit
               }
-              className="rounded-full px-2 py-1 text-sm text-[#007aff]"
+              className="px-2 py-1 text-sm text-[#007aff]"
               aria-label="Edit personal event"
             >
               Edit
@@ -259,7 +259,7 @@ export default function ScheduleLessonCard({
               onClick={
                 handleDelete
               }
-              className="rounded-full px-2 py-1 text-sm text-[#ff3b30]"
+              className="px-2 py-1 text-sm text-[#ff3b30]"
               aria-label="Delete personal event"
             >
               Delete
@@ -277,7 +277,7 @@ export default function ScheduleLessonCard({
       onClick={
         handleLessonClick
       }
-      className={`flex w-full items-stretch rounded-2xl bg-[#f2f2f7] px-4 py-3.5 text-left transition-opacity active:opacity-70 ${
+      className={`flex w-full items-center gap-2 rounded-lg bg-[var(--surface-secondary)] px-3 py-2.5 text-left transition-opacity active:opacity-70 ${
         past
           ? 'opacity-55'
           : ''
@@ -287,21 +287,21 @@ export default function ScheduleLessonCard({
         'lesson'
       }`}
     >
-      <div className="flex w-[72px] shrink-0 flex-col justify-center pr-3 text-right">
+      <div className="w-[58px] shrink-0 text-right">
         {time ? (
-          <>
-            <span className="font-mono text-[18px] font-medium leading-[1.15] tracking-tight text-[var(--text-primary)]">
+          <div className="flex flex-col items-end">
+            <span className="font-mono text-[14px] leading-tight text-[var(--text-primary)]">
               {time.start}
             </span>
 
             {time.end && (
-              <span className="mt-1 font-mono text-[15px] leading-[1.15] text-[var(--text-primary)]">
+              <span className="mt-0.5 font-mono text-[11px] leading-tight text-[var(--text-secondary)]">
                 {time.end}
               </span>
             )}
-          </>
+          </div>
         ) : (
-          <span className="font-mono text-[15px] text-[#8e8e93]">
+          <span className="font-mono text-[13px] text-[var(--text-secondary)]">
             —
           </span>
         )}
@@ -309,78 +309,60 @@ export default function ScheduleLessonCard({
 
       <div
         aria-hidden="true"
-        className="my-0.5 w-[5px] shrink-0 rounded-full"
+        className="h-9 w-1 shrink-0 rounded-full"
         style={{
           backgroundColor:
             formConfig.color
         }}
       />
 
-      <div className="min-w-0 flex-1 pl-4">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
           <Icon
             name={
               formConfig.icon
             }
-            className="h-6 w-6 shrink-0 text-[var(--text-primary)]"
-            strokeWidth={1.8}
+            className="h-[17px] w-[17px] shrink-0"
+            strokeWidth={1.7}
           />
 
-          <h3 className="min-w-0 truncate text-[19px] font-bold leading-tight text-[var(--text-primary)]">
+          <span className="min-w-0 truncate text-[15px] font-semibold leading-tight text-[var(--text-primary)]">
             {item.subject ||
               'Lesson'}
-          </h3>
-
-          {subgroup !==
-            null && (
-            <div className="flex shrink-0 items-center gap-1 text-[#6b6b70]">
-              <Icon
-                name="user"
-                className="h-5 w-5"
-                strokeWidth={1.7}
-              />
-
-              <span className="text-[17px] leading-none">
-                {subgroup}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-2 min-w-0">
-          <span className="block truncate text-[17px] leading-tight text-[#3c3c43]">
-            {item.room || '—'}
           </span>
         </div>
 
-        {current &&
-          minutesLeft !==
-            null && (
-            <span className="mt-1.5 block text-[11px] font-semibold text-[#34c759]">
-              Ends in{' '}
-              {minutesLeft}{' '}
-              min
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+          {item.room && (
+            <span className="truncate text-[13px] leading-tight text-[var(--text-secondary)]">
+              {item.room}
             </span>
           )}
-      </div>
 
-      <div className="ml-3 flex w-[58px] shrink-0 items-center justify-center">
-        <div className="flex h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-full bg-[#e1e1e6]">
-          {teacherPhoto ? (
-            <img
-              src={teacherPhoto}
-              alt=""
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <Icon
-              name="image"
-              className="h-7 w-7 text-[#8e8e93]"
-              strokeWidth={1.7}
-            />
+          {subgroup !== null && (
+            <span className="flex shrink-0 items-center gap-0.5 text-[12px] text-[var(--text-secondary)]">
+              <Icon
+                name="user"
+                className="h-3.5 w-3.5"
+                strokeWidth={1.6}
+              />
+              {subgroup}
+            </span>
+          )}
+
+          {weeks && (
+            <span className="text-[12px] text-[var(--text-secondary)]">
+              {weeks}
+            </span>
           )}
         </div>
+
+        {current &&
+          minutesLeft !== null && (
+            <span className="mt-1 block text-[10px] font-medium text-[#34c759]">
+              Ends in {minutesLeft} min
+            </span>
+          )}
       </div>
     </button>
   );
