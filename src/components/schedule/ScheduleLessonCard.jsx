@@ -134,24 +134,24 @@ function getSubgroup(item) {
   return subgroup;
 }
 
-function getWeeks(item) {
-  if (
-    Array.isArray(item?.weekNumber)
-  ) {
-    return item.weekNumber
-      .filter(
-        week =>
-          Number.isInteger(
-            Number(week)
-          ) &&
-          Number(week) >= 1 &&
-          Number(week) <= 4
-      )
-      .map(Number)
-      .join(', ');
-  }
+function getTeacherName(item) {
+  return (
+    item?.teacherName ||
+    item?.teacher ||
+    item?.lecturer ||
+    item?.lecturerName ||
+    ''
+  );
+}
 
-  return '';
+function getTeacherPhoto(item) {
+  return (
+    item?.teacherPhoto ||
+    item?.teacherPhotoUrl ||
+    item?.lecturerPhoto ||
+    item?.lecturerPhotoUrl ||
+    ''
+  );
 }
 
 export default function ScheduleLessonCard({
@@ -188,8 +188,11 @@ export default function ScheduleLessonCard({
   const subgroup =
     getSubgroup(item);
 
-  const weeks =
-    getWeeks(item);
+  const teacherName =
+    getTeacherName(item);
+
+  const teacherPhoto =
+    getTeacherPhoto(item);
 
   const handleLessonClick =
     () => {
@@ -222,7 +225,7 @@ export default function ScheduleLessonCard({
     return (
       <div
         data-index={index}
-        className="rounded-lg bg-[var(--surface-secondary)] px-3 py-2.5 text-[var(--text-primary)]"
+        className="rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] px-3.5 py-3 text-[var(--text-primary)]"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -245,22 +248,16 @@ export default function ScheduleLessonCard({
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              onClick={
-                handleEdit
-              }
+              onClick={handleEdit}
               className="px-2 py-1 text-sm text-[#007aff]"
-              aria-label="Edit personal event"
             >
               Edit
             </button>
 
             <button
               type="button"
-              onClick={
-                handleDelete
-              }
+              onClick={handleDelete}
               className="px-2 py-1 text-sm text-[#ff3b30]"
-              aria-label="Delete personal event"
             >
               Delete
             </button>
@@ -274,10 +271,12 @@ export default function ScheduleLessonCard({
     <button
       type="button"
       data-index={index}
-      onClick={
-        handleLessonClick
-      }
-      className={`flex w-full items-center gap-2 rounded-lg bg-[var(--surface-secondary)] px-3 py-2.5 text-left transition-opacity active:opacity-70 ${
+      onClick={handleLessonClick}
+      className={`group flex w-full items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] px-3.5 py-3 text-left transition-colors active:opacity-70 ${
+        current
+          ? 'ring-1 ring-[#007aff]/20'
+          : ''
+      } ${
         past
           ? 'opacity-55'
           : ''
@@ -287,15 +286,15 @@ export default function ScheduleLessonCard({
         'lesson'
       }`}
     >
-      <div className="w-[58px] shrink-0 text-right">
+      <div className="w-[48px] shrink-0 text-left">
         {time ? (
-          <div className="flex flex-col items-end">
-            <span className="font-mono text-[14px] leading-tight text-[var(--text-primary)]">
+          <div>
+            <span className="block font-mono text-[14px] font-medium leading-tight text-[var(--text-primary)]">
               {time.start}
             </span>
 
             {time.end && (
-              <span className="mt-0.5 font-mono text-[11px] leading-tight text-[var(--text-secondary)]">
+              <span className="mt-0.5 block font-mono text-[11px] leading-tight text-[var(--text-secondary)]">
                 {time.end}
               </span>
             )}
@@ -307,62 +306,86 @@ export default function ScheduleLessonCard({
         )}
       </div>
 
-      <div
-        aria-hidden="true"
-        className="h-9 w-1 shrink-0 rounded-full"
-        style={{
-          backgroundColor:
-            formConfig.color
-        }}
-      />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <div
+          aria-hidden="true"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+          style={{
+            backgroundColor: `${formConfig.color}18`
+          }}
+        >
           <Icon
-            name={
-              formConfig.icon
-            }
-            className="h-[17px] w-[17px] shrink-0"
+            name={formConfig.icon}
+            className="h-[18px] w-[18px]"
             strokeWidth={1.7}
+            style={{
+              color:
+                formConfig.color
+            }}
           />
-
-          <span className="min-w-0 truncate text-[15px] font-semibold leading-tight text-[var(--text-primary)]">
-            {item.subject ||
-              'Lesson'}
-          </span>
         </div>
 
-        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-          {item.room && (
-            <span className="truncate text-[13px] leading-tight text-[var(--text-secondary)]">
-              {item.room}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate text-[15px] font-semibold leading-tight text-[var(--text-primary)]">
+              {item.subject ||
+                'Lesson'}
             </span>
-          )}
 
-          {subgroup !== null && (
-            <span className="flex shrink-0 items-center gap-0.5 text-[12px] text-[var(--text-secondary)]">
+            {subgroup !== null && (
+              <span className="shrink-0 rounded-md bg-[var(--surface-tertiary)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-secondary)]">
+                {subgroup}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            {item.room && (
+              <span className="truncate text-[12px] leading-tight text-[var(--text-secondary)]">
+                {item.room}
+              </span>
+            )}
+
+            {item.room &&
+              teacherName && (
+                <span className="text-[11px] text-[var(--text-tertiary)]">
+                  •
+                </span>
+              )}
+
+            {teacherName && (
+              <span className="min-w-0 truncate text-[12px] leading-tight text-[var(--text-secondary)]">
+                {teacherName}
+              </span>
+            )}
+          </div>
+
+          {current &&
+            minutesLeft !== null && (
+              <span className="mt-1 block text-[10px] font-medium text-[#34c759]">
+                Ends in {minutesLeft} min
+              </span>
+            )}
+        </div>
+
+        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[var(--surface-tertiary)]">
+          {teacherPhoto ? (
+            <img
+              src={teacherPhoto}
+              alt=""
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
               <Icon
                 name="user"
-                className="h-3.5 w-3.5"
+                className="h-5 w-5 text-[var(--text-tertiary)]"
                 strokeWidth={1.6}
               />
-              {subgroup}
-            </span>
-          )}
-
-          {weeks && (
-            <span className="text-[12px] text-[var(--text-secondary)]">
-              {weeks}
-            </span>
+            </div>
           )}
         </div>
-
-        {current &&
-          minutesLeft !== null && (
-            <span className="mt-1 block text-[10px] font-medium text-[#34c759]">
-              Ends in {minutesLeft} min
-            </span>
-          )}
       </div>
     </button>
   );
