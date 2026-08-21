@@ -15,35 +15,55 @@ function normalizeGroup(group) {
   return String(group || '').trim();
 }
 
-function cacheKey(group) {
-  return `sh_cached_schedule_${normalizeGroup(group)}`;
+function normalizeSubgroup(subgroup) {
+  return ['1', '2', 'all'].includes(
+    String(subgroup)
+  )
+    ? String(subgroup)
+    : '1';
 }
 
-function timestampKey(group) {
-  return `sh_cache_timestamp_${normalizeGroup(group)}`;
+function cacheKey(group, subgroup) {
+  return `sh_cached_schedule_${normalizeGroup(group)}_${normalizeSubgroup(subgroup)}`;
+}
+
+function timestampKey(group, subgroup) {
+  return `sh_cache_timestamp_${normalizeGroup(group)}_${normalizeSubgroup(subgroup)}`;
 }
 
 /* ============================================================
    CACHE
    ============================================================ */
 
-export function readCachedSchedule(group) {
-  const normalizedGroup = normalizeGroup(group);
+export function readCachedSchedule(
+  group,
+  subgroup
+) {
+  const normalizedGroup =
+    normalizeGroup(group);
 
   if (!normalizedGroup) {
     return null;
   }
 
+  const normalizedSubgroup =
+    normalizeSubgroup(subgroup);
+
   try {
-    const value = localStorage.getItem(
-      cacheKey(normalizedGroup)
-    );
+    const value =
+      localStorage.getItem(
+        cacheKey(
+          normalizedGroup,
+          normalizedSubgroup
+        )
+      );
 
     if (!value) {
       return null;
     }
 
-    const parsed = JSON.parse(value);
+    const parsed =
+      JSON.parse(value);
 
     if (
       !parsed ||
@@ -52,14 +72,6 @@ export function readCachedSchedule(group) {
       return null;
     }
 
-    /*
-     * Cache currently stores the complete API
-     * response, so support both:
-     *
-     * { data: {...} }
-     *
-     * and directly stored normalized data.
-     */
     const data =
       parsed.data &&
       typeof parsed.data === 'object'
@@ -77,7 +89,9 @@ export function readCachedSchedule(group) {
           : {},
 
       todaySchedules:
-        Array.isArray(data.todaySchedules)
+        Array.isArray(
+          data.todaySchedules
+        )
           ? data.todaySchedules
           : [],
 
@@ -104,37 +118,61 @@ export function readCachedSchedule(group) {
   }
 }
 
-export function readCacheTimestamp(group) {
-  const normalizedGroup = normalizeGroup(group);
+export function readCacheTimestamp(
+  group,
+  subgroup
+) {
+  const normalizedGroup =
+    normalizeGroup(group);
 
   if (!normalizedGroup) {
     return null;
   }
 
+  const normalizedSubgroup =
+    normalizeSubgroup(subgroup);
+
   try {
     return localStorage.getItem(
-      timestampKey(normalizedGroup)
+      timestampKey(
+        normalizedGroup,
+        normalizedSubgroup
+      )
     );
   } catch {
     return null;
   }
 }
 
-export function saveCachedSchedule(group, json) {
-  const normalizedGroup = normalizeGroup(group);
+export function saveCachedSchedule(
+  group,
+  subgroup,
+  json
+) {
+  const normalizedGroup =
+    normalizeGroup(group);
 
   if (!normalizedGroup || !json) {
     return;
   }
 
+  const normalizedSubgroup =
+    normalizeSubgroup(subgroup);
+
   try {
     localStorage.setItem(
-      cacheKey(normalizedGroup),
+      cacheKey(
+        normalizedGroup,
+        normalizedSubgroup
+      ),
       JSON.stringify(json)
     );
 
     localStorage.setItem(
-      timestampKey(normalizedGroup),
+      timestampKey(
+        normalizedGroup,
+        normalizedSubgroup
+      ),
       new Date().toISOString()
     );
   } catch (error) {
@@ -145,20 +183,33 @@ export function saveCachedSchedule(group, json) {
   }
 }
 
-export function clearScheduleCache(group) {
-  const normalizedGroup = normalizeGroup(group);
+export function clearScheduleCache(
+  group,
+  subgroup
+) {
+  const normalizedGroup =
+    normalizeGroup(group);
 
   if (!normalizedGroup) {
     return;
   }
 
+  const normalizedSubgroup =
+    normalizeSubgroup(subgroup);
+
   try {
     localStorage.removeItem(
-      cacheKey(normalizedGroup)
+      cacheKey(
+        normalizedGroup,
+        normalizedSubgroup
+      )
     );
 
     localStorage.removeItem(
-      timestampKey(normalizedGroup)
+      timestampKey(
+        normalizedGroup,
+        normalizedSubgroup
+      )
     );
   } catch (error) {
     console.error(
@@ -172,12 +223,21 @@ export function clearAllScheduleCaches() {
   try {
     const keysToRemove = [];
 
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
+    for (
+      let i = 0;
+      i < localStorage.length;
+      i += 1
+    ) {
+      const key =
+        localStorage.key(i);
 
       if (
-        key?.startsWith('sh_cached_schedule_') ||
-        key?.startsWith('sh_cache_timestamp_')
+        key?.startsWith(
+          'sh_cached_schedule_'
+        ) ||
+        key?.startsWith(
+          'sh_cache_timestamp_'
+        )
       ) {
         keysToRemove.push(key);
       }
@@ -198,7 +258,9 @@ export function clearAllScheduleCaches() {
    RESPONSE NORMALIZATION
    ============================================================ */
 
-export function normalizeScheduleResponse(json) {
+export function normalizeScheduleResponse(
+  json
+) {
   if (
     !json ||
     typeof json !== 'object'
@@ -227,7 +289,9 @@ export function normalizeScheduleResponse(json) {
         : {},
 
     todaySchedules:
-      Array.isArray(source.todaySchedules)
+      Array.isArray(
+        source.todaySchedules
+      )
         ? source.todaySchedules
         : [],
 
@@ -348,13 +412,8 @@ export async function fetchGroupSchedule(
     );
   }
 
-  const normalizedSubgroup = [
-  '1',
-  '2',
-  'all'
-].includes(String(subgroup))
-  ? String(subgroup)
-  : '1';
+  const normalizedSubgroup =
+    normalizeSubgroup(subgroup);
 
   const signal =
     options.signal;
@@ -430,15 +489,6 @@ export async function fetchGroupSchedule(
    LOAD GROUP SCHEDULE
    ============================================================ */
 
-/*
- * This is the main function App.jsx will use.
- *
- * Important:
- * - cached data is returned immediately when available
- * - live data is still requested unless offline
- * - failed refresh falls back to cached data
- * - UI/status information is returned separately
- */
 export async function loadGroupSchedule(
   group,
   subgroup,
@@ -463,20 +513,21 @@ export async function loadGroupSchedule(
     };
   }
 
+  const normalizedSubgroup =
+    normalizeSubgroup(subgroup);
+
   const cached =
     readCachedSchedule(
-      normalizedGroup
+      normalizedGroup,
+      normalizedSubgroup
     );
 
   const lastUpdated =
     readCacheTimestamp(
-      normalizedGroup
+      normalizedGroup,
+      normalizedSubgroup
     );
 
-  /*
-   * Offline:
-   * never make a network request.
-   */
   if (offline) {
     return {
       data:
@@ -501,14 +552,11 @@ export async function loadGroupSchedule(
     };
   }
 
-  /*
-   * Try live data.
-   */
   try {
     const result =
       await fetchGroupSchedule(
         normalizedGroup,
-        subgroup,
+        normalizedSubgroup,
         { signal }
       );
 
@@ -518,16 +566,10 @@ export async function loadGroupSchedule(
       usable
     } = result;
 
-    /*
-     * If the response contains useful
-     * schedule data, replace the cache.
-     *
-     * If it doesn't, preserve an existing
-     * cache rather than destroying good data.
-     */
     if (usable) {
       saveCachedSchedule(
         normalizedGroup,
+        normalizedSubgroup,
         response
       );
 
@@ -539,6 +581,7 @@ export async function loadGroupSchedule(
 
       if (response.fallback) {
         state = 'fallback';
+
         error =
           getScheduleStatusMessage(
             data,
@@ -549,6 +592,7 @@ export async function loadGroupSchedule(
         response.stale
       ) {
         state = 'cached';
+
         error =
           getScheduleStatusMessage(
             data,
@@ -565,12 +609,6 @@ export async function loadGroupSchedule(
       };
     }
 
-    /*
-     * Live response exists but contains
-     * no useful timetable data.
-     *
-     * Prefer existing cache.
-     */
     if (cached) {
       return {
         data: cached,
@@ -591,9 +629,6 @@ export async function loadGroupSchedule(
         'The schedule server returned no usable timetable data.'
     };
   } catch (error) {
-    /*
-     * Abort is not a real error.
-     */
     if (
       error?.name ===
       'AbortError'
@@ -606,10 +641,6 @@ export async function loadGroupSchedule(
       error
     );
 
-    /*
-     * Most important fallback:
-     * keep the previous good schedule.
-     */
     if (cached) {
       return {
         data: cached,
