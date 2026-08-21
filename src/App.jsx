@@ -134,6 +134,28 @@ function AppContent() {
       normalizedGroup
     );
   };
+  
+  const handleSubgroupChange =
+  newSubgroup => {
+    const normalizedSubgroup = [
+      '1',
+      '2',
+      'all'
+    ].includes(
+      String(newSubgroup)
+    )
+      ? String(newSubgroup)
+      : '1';
+
+    setSubgroup(
+      normalizedSubgroup
+    );
+
+    localStorage.setItem(
+      'sh_subgroup',
+      normalizedSubgroup
+    );
+  };
 
   const handleThemeChange = newTheme => {
     setThemeMode(newTheme);
@@ -243,6 +265,7 @@ function AppContent() {
   loading={loading}
   onLessonClick={setSelectedLesson}
   onGroupChange={handleGroupChange}
+  onSubgroupChange={setSubgroup}
 />
         )}
 
