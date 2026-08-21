@@ -29,11 +29,11 @@ const DISPLAY_ACTIONS = [
 
 export default function ScheduleToolbar({
   group,
+  subgroup = '1',
   activeAction = 'continuous',
   onAction,
   onOpenGroupSelector,
   onOpenGroupBrowser,
-  onOpenSubgroupSelector,
   isFavorite = false,
   onSubgroupChange,
   onToggleFavorite
