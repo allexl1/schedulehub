@@ -7,12 +7,93 @@ import {
 
 import Icon from '../common/Icon';
 
-function getLessonAccent(item) {
-  return (
-    item?.color ||
-    item?.lessonColor ||
-    'var(--accent-primary, #007aff)'
-  );
+const FORM_CONFIG = {
+  lecture: {
+    color: '#34c759',
+    icon: 'lessonLecture'
+  },
+  practice: {
+    color: '#ff3b30',
+    icon: 'lessonPractice'
+  },
+  lab: {
+    color: '#ffcc00',
+    icon: 'lessonLab'
+  },
+  consultation: {
+    color: '#a2845e',
+    icon: 'lessonConsultation'
+  },
+  exam: {
+    color: '#af52de',
+    icon: 'lessonExam'
+  },
+  test: {
+    color: '#5856d6',
+    icon: 'lessonTest'
+  },
+  unknown: {
+    color: '#8e8e93',
+    icon: 'lessonUnknown'
+  }
+};
+
+function normalizeLessonForm(item) {
+  const value = String(
+    item?.lessonTypeAbbrev ||
+      item?.lessonType ||
+      item?.type ||
+      ''
+  )
+    .trim()
+    .toLowerCase();
+
+  if (
+    value === 'лк' ||
+    value === 'улк' ||
+    value.includes('lecture')
+  ) {
+    return 'lecture';
+  }
+
+  if (
+    value === 'пз' ||
+    value === 'упз' ||
+    value.includes('practice') ||
+    value.includes('seminar')
+  ) {
+    return 'practice';
+  }
+
+  if (
+    value === 'лр' ||
+    value === 'улр' ||
+    value.includes('lab')
+  ) {
+    return 'lab';
+  }
+
+  if (
+    value.includes('консульта')
+  ) {
+    return 'consultation';
+  }
+
+  if (
+    value.includes('экзамен') ||
+    value.includes('exam')
+  ) {
+    return 'exam';
+  }
+
+  if (
+    value.includes('зачет') ||
+    value.includes('test')
+  ) {
+    return 'test';
+  }
+
+  return 'unknown';
 }
 
 function getLessonTime(item) {
@@ -20,8 +101,9 @@ function getLessonTime(item) {
     return null;
   }
 
-  const range =
-    parseTimeRange(item.time);
+  const range = parseTimeRange(
+    item.time
+  );
 
   if (
     !range?.startTime &&
@@ -31,34 +113,9 @@ function getLessonTime(item) {
   }
 
   return {
-    start:
-      range.startTime || '',
-    end:
-      range.endTime || ''
+    start: range.startTime || '',
+    end: range.endTime || ''
   };
-}
-
-function getLessonFormIcon(item) {
-  const type =
-    String(
-      item?.type || ''
-    ).toLowerCase();
-
-  if (
-    type.includes('lab') ||
-    type.includes('laboratory')
-  ) {
-    return 'exams';
-  }
-
-  if (
-    type.includes('practice') ||
-    type.includes('seminar')
-  ) {
-    return 'user';
-  }
-
-  return 'schedule';
 }
 
 function getTeacherPhoto(item) {
@@ -74,6 +131,26 @@ function getTeacherPhoto(item) {
     item.employees[0]
       ?.photoLink || ''
   );
+}
+
+function getSubgroup(item) {
+  const value =
+    item?.numSubgroup ??
+    item?.subgroup;
+
+  const subgroup =
+    Number(value);
+
+  if (
+    !Number.isInteger(
+      subgroup
+    ) ||
+    subgroup === 0
+  ) {
+    return null;
+  }
+
+  return subgroup;
 }
 
 export default function ScheduleLessonCard({
@@ -102,8 +179,14 @@ export default function ScheduleLessonCard({
         )
       : null;
 
-  const accent =
-    getLessonAccent(item);
+  const form =
+    normalizeLessonForm(item);
+
+  const formConfig =
+    FORM_CONFIG[form];
+
+  const subgroup =
+    getSubgroup(item);
 
   const teacherPhoto =
     getTeacherPhoto(item);
@@ -139,7 +222,7 @@ export default function ScheduleLessonCard({
     return (
       <div
         data-index={index}
-        className="rounded-[16px] bg-[#f2f2f7] px-4 py-3 text-[var(--text-primary)]"
+        className="rounded-2xl bg-[#f2f2f7] px-4 py-3 text-[var(--text-primary)]"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -194,7 +277,7 @@ export default function ScheduleLessonCard({
       onClick={
         handleLessonClick
       }
-      className={`flex w-full items-stretch rounded-[16px] bg-[#f2f2f7] px-4 py-3.5 text-left transition-opacity active:opacity-70 ${
+      className={`flex w-full items-stretch rounded-2xl bg-[#f2f2f7] px-4 py-3.5 text-left transition-opacity active:opacity-70 ${
         past
           ? 'opacity-55'
           : ''
@@ -229,16 +312,16 @@ export default function ScheduleLessonCard({
         className="my-0.5 w-[5px] shrink-0 rounded-full"
         style={{
           backgroundColor:
-            accent
+            formConfig.color
         }}
       />
 
       <div className="min-w-0 flex-1 pl-4">
         <div className="flex min-w-0 items-center gap-2">
           <Icon
-            name={getLessonFormIcon(
-              item
-            )}
+            name={
+              formConfig.icon
+            }
             className="h-6 w-6 shrink-0 text-[var(--text-primary)]"
             strokeWidth={1.8}
           />
@@ -248,32 +331,25 @@ export default function ScheduleLessonCard({
               'Lesson'}
           </h3>
 
-          {item.numSubgroup &&
-            item.numSubgroup !==
-              'all' &&
-            Number(
-              item.numSubgroup
-            ) !== 0 && (
-              <div className="flex shrink-0 items-center gap-1 text-[#6b6b70]">
-                <Icon
-                  name="user"
-                  className="h-5 w-5"
-                  strokeWidth={1.7}
-                />
+          {subgroup !==
+            null && (
+            <div className="flex shrink-0 items-center gap-1 text-[#6b6b70]">
+              <Icon
+                name="user"
+                className="h-5 w-5"
+                strokeWidth={1.7}
+              />
 
-                <span className="text-[17px] leading-none">
-                  {
-                    item.numSubgroup
-                  }
-                </span>
-              </div>
-            )}
+              <span className="text-[17px] leading-none">
+                {subgroup}
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="mt-2 flex min-w-0 items-center gap-2">
-          <span className="truncate text-[17px] leading-tight text-[#3c3c43]">
-            {item.room ||
-              '—'}
+        <div className="mt-2 min-w-0">
+          <span className="block truncate text-[17px] leading-tight text-[#3c3c43]">
+            {item.room || '—'}
           </span>
         </div>
 
