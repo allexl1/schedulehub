@@ -162,6 +162,15 @@ const icons = {
       d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Zm-5 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
     />
   ),
+  
+    subgroup: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.8}
+      d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-6 10a6 6 0 0 1 12 0M17 5a3 3 0 0 1 0 6m2 10a5 5 0 0 0-4-4.85"
+    />
+  ),
 
   user: (
     <path
