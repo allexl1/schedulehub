@@ -261,7 +261,7 @@ export default function ScheduleLessonCard({
           {subgroup !== null && (
   <span className="inline-flex shrink-0 items-center gap-1 text-[14px] font-normal text-[var(--text-secondary)]">
     <Icon
-      name="subgroup"
+      name="subgroupSingle"
       className="h-4 w-4"
       strokeWidth={1.7}
     />
