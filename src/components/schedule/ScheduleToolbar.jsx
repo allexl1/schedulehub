@@ -74,10 +74,8 @@ export default function ScheduleToolbar({
   };
 
   return (
-    <header className="space-y-3">
-      <h1 className="text-lg font-bold leading-tight tracking-tight text-[var(--text-primary)]">
-        Schedule
-      </h1>
+    <header>
+  
 
       <div className="relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
         <button
