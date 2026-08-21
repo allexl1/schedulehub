@@ -120,10 +120,7 @@ function getSubgroup(item) {
 
 function getTeacherPhoto(item) {
   return (
-    item?.teacherPhoto ||
-    item?.teacherPhotoUrl ||
-    item?.lecturerPhoto ||
-    item?.lecturerPhotoUrl ||
+    item?.employees?.[0]?.photoLink ||
     item?.teacher?.photoLink ||
     item?.lecturer?.photoLink ||
     ''
