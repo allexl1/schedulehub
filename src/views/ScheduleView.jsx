@@ -368,7 +368,8 @@ export default function ScheduleView({
   group,
   subgroup = 1,
   loading = false,
-  onGroupChange
+  onGroupChange,
+  onSubgroupChange
 }) {
   const [
     now,
@@ -1198,6 +1199,9 @@ export default function ScheduleView({
           onToggleFavorite={
             handleToggleFavorite
           }
+          onSubgroupChange={
+  onSubgroupChange
+  }
         />
 
         {activeAction ===
