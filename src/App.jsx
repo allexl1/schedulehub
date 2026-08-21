@@ -14,6 +14,39 @@ import { useSchedule } from './hooks/useSchedule';
 import { clearScheduleCache } from './services/scheduleService';
 import { LanguageProvider } from './context/LanguageContext';
 
+const SUBGROUP_OPTIONS = [
+  '1',
+  '2',
+  'all'
+];
+
+function readSubgroup(
+  key,
+  fallback = '1'
+) {
+  const saved =
+    localStorage.getItem(key);
+
+  return SUBGROUP_OPTIONS.includes(
+    saved
+  )
+    ? saved
+    : fallback;
+}
+
+function normalizeSubgroup(
+  subgroup
+) {
+  const value =
+    String(subgroup);
+
+  return SUBGROUP_OPTIONS.includes(
+    value
+  )
+    ? value
+    : '1';
+}
+
 function AppContent() {
   const {
     user,
@@ -23,71 +56,182 @@ function AppContent() {
 
   const isOffline = useOffline();
 
-  const [activeTab, setActiveTab] = useState('home');
-  const [selectedLesson, setSelectedLesson] = useState(null);
+  const [
+    activeTab,
+    setActiveTab
+  ] = useState('home');
 
-  const [isOnboarded, setIsOnboarded] = useState(
+  const [
+    selectedLesson,
+    setSelectedLesson
+  ] = useState(null);
+
+  const [
+    isOnboarded,
+    setIsOnboarded
+  ] = useState(
     () =>
-      localStorage.getItem('sh_onboarded') === 'true'
+      localStorage.getItem(
+        'sh_onboarded'
+      ) === 'true'
   );
 
-  const [group, setGroup] = useState(
-    () => localStorage.getItem('sh_group') || ''
-  );
-
-  const [subgroup, setSubgroup] = useState(() => {
-  const saved =
-    localStorage.getItem('sh_subgroup');
-
-  return ['1', '2', 'all'].includes(saved)
-    ? saved
-    : '1';
-});
-
-  const [themeMode, setThemeMode] = useState(
+  /*
+   * Personal schedule
+   *
+   * Used by Home and Settings.
+   * This is the student's own
+   * configured group/subgroup.
+   */
+  const [
+    group,
+    setGroup
+  ] = useState(
     () =>
-      localStorage.getItem('sh_theme') || 'system'
+      localStorage.getItem(
+        'sh_group'
+      ) || ''
   );
 
+  const [
+    subgroup,
+    setSubgroup
+  ] = useState(
+    () =>
+      readSubgroup(
+        'sh_subgroup'
+      )
+  );
+
+  /*
+   * Schedule browser
+   *
+   * Independent from the personal
+   * schedule configuration.
+   *
+   * Schedule can browse another
+   * group/subgroup without changing
+   * what Home represents.
+   */
+  const [
+    scheduleGroup,
+    setScheduleGroup
+  ] = useState(
+    () =>
+      localStorage.getItem(
+        'sh_schedule_group'
+      ) ||
+      localStorage.getItem(
+        'sh_group'
+      ) ||
+      ''
+  );
+
+  const [
+    scheduleSubgroup,
+    setScheduleSubgroup
+  ] = useState(
+    () =>
+      readSubgroup(
+        'sh_schedule_subgroup'
+      )
+  );
+
+  const [
+    themeMode,
+    setThemeMode
+  ] = useState(
+    () =>
+      localStorage.getItem(
+        'sh_theme'
+      ) || 'system'
+  );
+
+  /*
+   * Personal schedule data.
+   *
+   * Home must always use the
+   * personal subgroup.
+   */
   const {
-    scheduleData,
-    loading,
-    apiError,
-    apiState,
-    lastUpdated
+    scheduleData:
+      personalScheduleData,
+    loading:
+      personalLoading,
+    apiError:
+      personalApiError,
+    apiState:
+      personalApiState,
+    lastUpdated:
+      personalLastUpdated
   } = useSchedule({
     group,
     subgroup,
     isOffline
   });
 
+  /*
+   * Schedule browser data.
+   *
+   * ScheduleView gets its own group
+   * and subgroup state.
+   */
+  const {
+    scheduleData:
+      scheduleBrowserData,
+    loading:
+      scheduleLoading,
+    apiError:
+      scheduleApiError,
+    apiState:
+      scheduleApiState
+  } = useSchedule({
+    group:
+      scheduleGroup,
+    subgroup:
+      scheduleSubgroup,
+    isOffline
+  });
+
   useEffect(() => {
-    const root = document.documentElement;
+    const root =
+      document.documentElement;
 
     const activeTheme =
       themeMode === 'system'
         ? colorScheme || 'dark'
         : themeMode;
 
-    root.classList.remove('light', 'dark');
-    root.classList.add(activeTheme);
-  }, [themeMode, colorScheme]);
+    root.classList.remove(
+      'light',
+      'dark'
+    );
+
+    root.classList.add(
+      activeTheme
+    );
+  }, [
+    themeMode,
+    colorScheme
+  ]);
 
   const handleOnboardingComplete = (
     newGroup,
     newSubgroup
   ) => {
-    triggerHaptic('medium');
+    triggerHaptic(
+      'medium'
+    );
 
     const normalizedGroup =
-      String(newGroup || '').trim();
+      String(
+        newGroup || ''
+      ).trim();
 
     const normalizedSubgroup =
-  ['1', '2', 'all'].includes(
-    String(newSubgroup)
-  )
-    ? String(newSubgroup)
-    : '1';
+      normalizeSubgroup(
+        newSubgroup
+      );
 
     if (!normalizedGroup) {
       return;
@@ -100,7 +244,22 @@ function AppContent() {
 
     localStorage.setItem(
       'sh_subgroup',
-      String(normalizedSubgroup)
+      normalizedSubgroup
+    );
+
+    /*
+     * Schedule starts from the
+     * personal group/subgroup once.
+     * After that, it is independent.
+     */
+    localStorage.setItem(
+      'sh_schedule_group',
+      normalizedGroup
+    );
+
+    localStorage.setItem(
+      'sh_schedule_subgroup',
+      normalizedSubgroup
     );
 
     localStorage.setItem(
@@ -108,97 +267,180 @@ function AppContent() {
       'true'
     );
 
-    setGroup(normalizedGroup);
-    setSubgroup(normalizedSubgroup);
-    setIsOnboarded(true);
-  };
-
-  const handleTabChange = tab => {
-    triggerHaptic('light');
-    setSelectedLesson(null);
-    setActiveTab(tab);
-  };
-
-  const handleGroupChange = newGroup => {
-    const normalizedGroup =
-      String(newGroup || '').trim();
-
-    if (!normalizedGroup) {
-      return;
-    }
-
-    setGroup(normalizedGroup);
-
-    localStorage.setItem(
-      'sh_group',
+    setGroup(
       normalizedGroup
     );
-  };
-  
-  const handleSubgroupChange =
-  newSubgroup => {
-    const normalizedSubgroup = [
-      '1',
-      '2',
-      'all'
-    ].includes(
-      String(newSubgroup)
-    )
-      ? String(newSubgroup)
-      : '1';
 
     setSubgroup(
       normalizedSubgroup
     );
 
-    localStorage.setItem(
-      'sh_subgroup',
+    setScheduleGroup(
+      normalizedGroup
+    );
+
+    setScheduleSubgroup(
       normalizedSubgroup
     );
-  };
 
-  const handleThemeChange = newTheme => {
-    setThemeMode(newTheme);
-
-    localStorage.setItem(
-      'sh_theme',
-      newTheme
+    setIsOnboarded(
+      true
     );
   };
 
-  const handleClearCache = () => {
-    clearScheduleCache(group);
+  const handleTabChange = tab => {
+    triggerHaptic(
+      'light'
+    );
+
+    setSelectedLesson(
+      null
+    );
+
+    setActiveTab(
+      tab
+    );
   };
+
+  const handleGroupChange =
+    newGroup => {
+      const normalizedGroup =
+        String(
+          newGroup || ''
+        ).trim();
+
+      if (!normalizedGroup) {
+        return;
+      }
+
+      setGroup(
+        normalizedGroup
+      );
+
+      localStorage.setItem(
+        'sh_group',
+        normalizedGroup
+      );
+    };
+
+  /*
+   * Home/personal subgroup.
+   */
+  const handleSubgroupChange =
+    newSubgroup => {
+      const normalizedSubgroup =
+        normalizeSubgroup(
+          newSubgroup
+        );
+
+      setSubgroup(
+        normalizedSubgroup
+      );
+
+      localStorage.setItem(
+        'sh_subgroup',
+        normalizedSubgroup
+      );
+    };
+
+  /*
+   * Schedule-only group.
+   *
+   * Does not affect Home.
+   */
+  const handleScheduleGroupChange =
+    newGroup => {
+      const normalizedGroup =
+        String(
+          newGroup || ''
+        ).trim();
+
+      if (!normalizedGroup) {
+        return;
+      }
+
+      setScheduleGroup(
+        normalizedGroup
+      );
+
+      localStorage.setItem(
+        'sh_schedule_group',
+        normalizedGroup
+      );
+    };
+
+  /*
+   * Schedule-only subgroup.
+   *
+   * This is the important fix:
+   * changing Schedule's subgroup
+   * cannot change Home's subgroup.
+   */
+  const handleScheduleSubgroupChange =
+    newSubgroup => {
+      const normalizedSubgroup =
+        normalizeSubgroup(
+          newSubgroup
+        );
+
+      setScheduleSubgroup(
+        normalizedSubgroup
+      );
+
+      localStorage.setItem(
+        'sh_schedule_subgroup',
+        normalizedSubgroup
+      );
+    };
+
+  const handleThemeChange =
+    newTheme => {
+      setThemeMode(
+        newTheme
+      );
+
+      localStorage.setItem(
+        'sh_theme',
+        newTheme
+      );
+    };
+
+  const handleClearCache =
+    () => {
+      clearScheduleCache(
+        group
+      );
+    };
 
   if (!isOnboarded) {
     return (
       <div className="max-w-[440px] mx-auto px-4">
         <OnboardingView
-          onComplete={handleOnboardingComplete}
+          onComplete={
+            handleOnboardingComplete
+          }
         />
       </div>
     );
   }
 
   const student =
-    scheduleData?.studentGroup || null;
-
-  const nextLesson =
-    scheduleData?.nextLesson || null;
-
-  const todaySchedule =
-    Array.isArray(scheduleData?.todaySchedules)
-      ? scheduleData.todaySchedules
-      : [];
+    personalScheduleData
+      ?.studentGroup ||
+    null;
 
   const statusState =
     isOffline
       ? 'offline'
-      : apiState === 'live'
+      : personalApiState ===
+          'live'
         ? 'live'
-        : apiState === 'cached' ||
-            apiState === 'stale' ||
-            apiState === 'fallback'
+        : personalApiState ===
+              'cached' ||
+            personalApiState ===
+              'stale' ||
+            personalApiState ===
+              'fallback'
           ? 'cached'
           : 'error';
 
@@ -206,8 +448,14 @@ function AppContent() {
     return (
       <div className="max-w-[440px] mx-auto px-4 pt-5 pb-10">
         <SubjectDetailsView
-          lesson={selectedLesson}
-          onBack={() => setSelectedLesson(null)}
+          lesson={
+            selectedLesson
+          }
+          onBack={() =>
+            setSelectedLesson(
+              null
+            )
+          }
         />
       </div>
     );
@@ -215,78 +463,78 @@ function AppContent() {
 
   return (
     <div className="max-w-[440px] mx-auto px-4 pt-5 pb-28">
-      {apiError && (
-        <div className="mb-4 rounded-2xl p-3 bg-[#f59e0b]/10 border border-[#f59e0b]/20 flex items-center gap-3 text-xs text-[#f59e0b]">
-          <span>
-            {isOffline
-              ? '📴'
-              : apiState === 'cached'
-                ? '🗄️'
-                : '⚠️'}
-          </span>
-
-          <div>
-            <strong className="block font-bold">
-              {isOffline
-                ? 'Offline Mode'
-                : apiState === 'cached'
-                  ? 'Cached Timetable'
-                  : apiState === 'fallback'
-                    ? 'BSUIR Data Unavailable'
-                    : apiState === 'error'
-                      ? 'Schedule Loading Error'
-                      : 'Schedule Status'}
-            </strong>
-
-            <span className="text-[11px] opacity-80">
-              {apiError}
-            </span>
-          </div>
-        </div>
+      {activeTab === 'home' && (
+        <HomeView
+          user={user}
+          group={group}
+          subgroup={subgroup}
+          scheduleData={
+            personalScheduleData
+          }
+          status={
+            statusState
+          }
+          lastUpdatedTimestamp={
+            personalLastUpdated
+          }
+        />
       )}
 
-      <main>
-        {activeTab === 'home' && (
-<HomeView
-  user={user}
-  group={group}
-  subgroup={subgroup}
-  scheduleData={scheduleData}
-  status={statusState}
-  lastUpdatedTimestamp={lastUpdated}
-  />
-        )}
+      {activeTab === 'schedule' && (
+        <ScheduleView
+          scheduleData={
+            scheduleBrowserData
+          }
+          group={
+            scheduleGroup
+          }
+          subgroup={
+            scheduleSubgroup
+          }
+          loading={
+            scheduleLoading
+          }
+          onLessonClick={
+            setSelectedLesson
+          }
+          onGroupChange={
+            handleScheduleGroupChange
+          }
+          onSubgroupChange={
+            handleScheduleSubgroupChange
+          }
+        />
+      )}
 
-        {activeTab === 'schedule' && (
-<ScheduleView
-  scheduleData={scheduleData}
-  group={group}
-  subgroup={subgroup}
-  loading={loading}
-  onLessonClick={setSelectedLesson}
-  onGroupChange={handleGroupChange}
-  onSubgroupChange={handleSubgroupChange}
-/>
-        )}
+      {activeTab === 'teachers' && (
+        <TeachersView />
+      )}
 
-        {activeTab === 'teachers' && (
-          <TeachersView />
-        )}
-
-        {activeTab === 'settings' && (
-          <SettingsView
-            group={group}
-            setGroup={handleGroupChange}
-            themeMode={themeMode}
-            setThemeMode={handleThemeChange}
-            onClearCache={handleClearCache}
-          />
-        )}
-      </main>
+      {activeTab === 'settings' && (
+        <SettingsView
+          group={group}
+          setGroup={
+            handleGroupChange
+          }
+          themeMode={
+            themeMode
+          }
+          setThemeMode={
+            handleThemeChange
+          }
+          onClearCache={
+            handleClearCache
+          }
+        />
+      )}
 
       <FloatingNav
-        activeTab={activeTab}
-        setActiveTab={handleTabChange}
+        activeTab={
+          activeTab
+        }
+        setActiveTab={
+          handleTabChange
+        }
       />
     </div>
   );
