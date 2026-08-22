@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 
 import GlassCard from '../components/common/GlassCard';
 import Icon from '../components/common/Icon';
@@ -138,8 +138,11 @@ function TeacherAvatar({
   );
 }
 
-export default function TeachersView() {
-  const isOffline = useOffline();
+export default function TeachersView({
+  selectedTeacher = null,
+  onTeacherSelect,
+  onBack
+}) {
 
   const {
     teachers,
@@ -153,9 +156,6 @@ export default function TeachersView() {
 
   const [searchQuery, setSearchQuery] =
     useState('');
-
-  const [selectedTeacher, setSelectedTeacher] =
-    useState(null);
 
   const filteredTeachers =
     useMemo(() => {
@@ -208,17 +208,6 @@ export default function TeachersView() {
       teachers,
       searchQuery
     ]);
-
-  const handleTeacherClick =
-    teacher => {
-      setSelectedTeacher(
-        current =>
-          current?.id ===
-          teacher?.id
-            ? null
-            : teacher
-      );
-    };
 
   return (
     <div className="space-y-4">
@@ -351,10 +340,10 @@ export default function TeachersView() {
                     }
                     interactive
                     onClick={() =>
-                      handleTeacherClick(
-                        teacher
-                      )
-                    }
+  onTeacherSelect?.(
+    teacher
+  )
+}
                   >
                     <div className="flex items-center gap-3">
                       <TeacherAvatar
