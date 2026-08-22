@@ -486,6 +486,133 @@ export async function fetchGroupSchedule(
 }
 
 /* ============================================================
+   TEACHER SCHEDULE API
+   ============================================================ */
+
+export async function fetchTeacherSchedule(
+  urlId,
+  options = {}
+) {
+  const normalizedUrlId =
+    String(urlId || '').trim();
+
+  if (!normalizedUrlId) {
+    throw new Error(
+      'No teacher urlId has been provided.'
+    );
+  }
+
+  const signal =
+    options.signal;
+
+  const endpoint =
+    `/api/bsuir/teacherSchedule?urlId=${encodeURIComponent(
+      normalizedUrlId
+    )}`;
+
+  const response =
+    await fetch(
+      endpoint,
+      {
+        headers: {
+          Accept:
+            'application/json'
+        },
+        signal
+      }
+    );
+
+  let json = null;
+
+  try {
+    json =
+      await response.json();
+  } catch {
+    json = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      getApiErrorMessage(
+        json,
+        response.status
+      )
+    );
+  }
+
+  if (
+    !json ||
+    json.success !== true ||
+    !json.data
+  ) {
+    throw new Error(
+      json?.error ||
+      'The teacher schedule server returned no schedule data.'
+    );
+  }
+
+  const data =
+    json.data;
+
+  if (
+    !data ||
+    typeof data !== 'object'
+  ) {
+    throw new Error(
+      'Invalid teacher schedule response.'
+    );
+  }
+
+  const schedules =
+    data.schedules &&
+    typeof data.schedules === 'object'
+      ? data.schedules
+      : {};
+
+  const exams =
+    Array.isArray(data.exams)
+      ? data.exams
+      : [];
+
+  const hasSchedules =
+    Object.values(
+      schedules
+    ).some(
+      value =>
+        Array.isArray(value) &&
+        value.length > 0
+    );
+
+  return {
+    data: {
+      ...data,
+
+      schedules,
+
+      previousSchedules:
+        data.previousSchedules &&
+        typeof data.previousSchedules === 'object'
+          ? data.previousSchedules
+          : {},
+
+      nextSchedules:
+        data.nextSchedules &&
+        typeof data.nextSchedules === 'object'
+          ? data.nextSchedules
+          : {},
+
+      exams
+    },
+
+    response: json,
+
+    usable:
+      hasSchedules ||
+      exams.length > 0
+  };
+}
+
+/* ============================================================
    LOAD GROUP SCHEDULE
    ============================================================ */
 
