@@ -65,6 +65,11 @@ function AppContent() {
     selectedLesson,
     setSelectedLesson
   ] = useState(null);
+  
+  const [
+  selectedTeacher,
+  setSelectedTeacher
+] = useState(null);
 
   const [
     isOnboarded,
@@ -289,18 +294,22 @@ function AppContent() {
   };
 
   const handleTabChange = tab => {
-    triggerHaptic(
-      'light'
-    );
+  triggerHaptic(
+    'light'
+  );
 
-    setSelectedLesson(
-      null
-    );
+  setSelectedLesson(
+    null
+  );
 
-    setActiveTab(
-      tab
-    );
-  };
+  setSelectedTeacher(
+    null
+  );
+
+  setActiveTab(
+    tab
+  );
+};
 
   const handleGroupChange =
     newGroup => {
@@ -506,9 +515,21 @@ function AppContent() {
         />
       )}
 
-      {activeTab === 'teachers' && (
-        <TeachersView />
-      )}
+{activeTab === 'teachers' && (
+  <TeachersView
+    selectedTeacher={
+      selectedTeacher
+    }
+    onTeacherSelect={
+      setSelectedTeacher
+    }
+    onBack={() =>
+      setSelectedTeacher(
+        null
+      )
+    }
+  />
+)}
 
       {activeTab === 'settings' && (
         <SettingsView
