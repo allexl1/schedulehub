@@ -1,8 +1,17 @@
-import { useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useState
+} from 'react';
 
 import {
   fetchTeacherSchedule
 } from '../services/scheduleService';
+
+import {
+  getAcademicWeekForDate,
+  resolveLessonsForDate
+} from '../utils/scheduleResolver';
 
 const EMPTY_STATE = {
   data: null,
@@ -110,14 +119,69 @@ export function useTeacherSchedule(
     enabled
   ]);
 
+  const getLessonsForDate =
+    useCallback(
+      (
+        date,
+        options = {}
+      ) => {
+        if (
+          !state.data ||
+          !date
+        ) {
+          return [];
+        }
+
+        const referenceDate =
+          options.referenceDate ||
+          new Date();
+
+        const week =
+          getAcademicWeekForDate(
+            date,
+            referenceDate
+          );
+
+        if (!week) {
+          return [];
+        }
+
+        return resolveLessonsForDate(
+          state.data.schedules,
+          date,
+          week,
+          'all',
+          {
+            referenceDate,
+
+            startDate:
+              state.data.startDate,
+
+            endDate:
+              state.data.endDate
+          }
+        );
+      },
+      [
+        state.data
+      ]
+    );
+
   return {
     data:
       state.data,
+
     loading:
       state.loading,
+
     error:
       state.error,
+
     hasData:
-      Boolean(state.data)
+      Boolean(
+        state.data
+      ),
+
+    getLessonsForDate
   };
 }
